@@ -1,0 +1,311 @@
+{
+  "title": "Claude Code Settings",
+  "description": "Configuration schema for Claude Code settings.json files",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for this configuration file"
+    },
+    "apiKeyHelper": {
+      "type": "string",
+      "description": "Custom script, to be executed in /bin/sh, to generate an auth value. This value will be sent as X-Api-Key and Authorization: Bearer headers for model requests",
+      "examples": [
+        "/bin/generate_temp_api_key.sh"
+      ]
+    },
+    "cleanupPeriodDays": {
+      "type": "integer",
+      "description": "How long to locally retain chat transcripts",
+      "default": 30,
+      "minimum": 1,
+      "examples": [
+        20,
+        30,
+        60
+      ]
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment variables that will be applied to every session",
+      "patternProperties": {
+        "^[A-Z][A-Z0-9_]*$": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "FOO": "bar",
+          "NODE_ENV": "development"
+        }
+      ]
+    },
+    "includeCoAuthoredBy": {
+      "type": "boolean",
+      "description": "Whether to include the co-authored-by Claude byline in git commits and pull requests",
+      "default": true,
+      "examples": [
+        false
+      ]
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Permission configuration for tool access and working directories",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "description": "Array of permission rules to allow tool use",
+          "items": {
+            "type": "string",
+            "pattern": "^(Bash|Edit|Glob|Grep|LS|MultiEdit|NotebookEdit|NotebookRead|Read|Task|TodoWrite|WebFetch|WebSearch|Write)(\\([^)]*\\))?$"
+          },
+          "examples": [
+            [
+              "Bash(git diff:*)",
+              "Read",
+              "Write"
+            ]
+          ]
+        },
+        "deny": {
+          "type": "array",
+          "description": "Array of permission rules to deny tool use",
+          "items": {
+            "type": "string",
+            "pattern": "^(Bash|Edit|Glob|Grep|LS|MultiEdit|NotebookEdit|NotebookRead|Read|Task|TodoWrite|WebFetch|WebSearch|Write)(\\([^)]*\\))?$"
+          },
+          "examples": [
+            [
+              "WebFetch",
+              "Bash(curl:*)"
+            ]
+          ]
+        },
+        "additionalDirectories": {
+          "type": "array",
+          "description": "Additional working directories that Claude has access to",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "../docs/",
+              "../lib/"
+            ]
+          ]
+        },
+        "defaultMode": {
+          "type": "string",
+          "description": "Default permission mode when opening Claude Code",
+          "enum": [
+            "acceptEdits",
+            "plan",
+            "execute",
+            "bypassPermissions"
+          ],
+          "examples": [
+            "acceptEdits"
+          ]
+        },
+        "disableBypassPermissionsMode": {
+          "type": "string",
+          "description": "Disable bypassPermissions mode from being activated",
+          "enum": [
+            "disable"
+          ],
+          "examples": [
+            "disable"
+          ]
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Configure custom commands to run before or after tool executions",
+      "additionalProperties": false,
+      "properties": {
+        "PreToolUse": {
+          "type": "object",
+          "description": "Commands to run before tool execution",
+          "patternProperties": {
+            "^(Bash|Edit|Glob|Grep|LS|MultiEdit|NotebookEdit|NotebookRead|Read|Task|TodoWrite|WebFetch|WebSearch|Write)$": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "PostToolUse": {
+          "type": "object",
+          "description": "Commands to run after tool execution",
+          "patternProperties": {
+            "^(Bash|Edit|Glob|Grep|LS|MultiEdit|NotebookEdit|NotebookRead|Read|Task|TodoWrite|WebFetch|WebSearch|Write)$": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "examples": [
+        {
+          "PreToolUse": {
+            "Bash": "echo 'Running command...'"
+          }
+        }
+      ]
+    },
+    "model": {
+      "type": "string",
+      "description": "Model to use for conversations",
+      "examples": [
+        "claude-3-5-sonnet-20241022",
+        "claude-sonnet-4-20250514",
+        "sonnet",
+        "opus"
+      ]
+    },
+    "forceLoginMethod": {
+      "type": "string",
+      "description": "Restrict login method to specific account type",
+      "enum": [
+        "claudeai",
+        "console"
+      ],
+      "examples": [
+        "claudeai"
+      ]
+    },
+    "enableAllProjectMcpServers": {
+      "type": "boolean",
+      "description": "Enable all MCP servers defined in .mcp.json files",
+      "examples": [
+        true
+      ]
+    },
+    "enabledMcpjsonServers": {
+      "type": "array",
+      "description": "Specific MCP servers from .mcp.json files to approve",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        [
+          "memory",
+          "github"
+        ]
+      ]
+    },
+    "disabledMcpjsonServers": {
+      "type": "array",
+      "description": "Specific MCP servers from .mcp.json files to reject",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        [
+          "filesystem"
+        ]
+      ]
+    },
+    "awsAuthRefresh": {
+      "type": "string",
+      "description": "Command to refresh AWS credentials from .aws directory",
+      "examples": [
+        "aws sso login --profile myprofile"
+      ]
+    },
+    "awsCredentialExport": {
+      "type": "string",
+      "description": "Script for advanced AWS credential configuration",
+      "examples": [
+        "/bin/generate_aws_grant.sh"
+      ]
+    },
+    "autoUpdates": {
+      "type": "boolean",
+      "description": "Whether to enable automatic updates",
+      "default": true,
+      "examples": [
+        false
+      ]
+    },
+    "preferredNotifChannel": {
+      "type": "string",
+      "description": "Where to receive notifications",
+      "enum": [
+        "iterm2",
+        "iterm2_with_bell",
+        "terminal_bell",
+        "notifications_disabled"
+      ],
+      "default": "iterm2",
+      "examples": [
+        "iterm2"
+      ]
+    },
+    "theme": {
+      "type": "string",
+      "description": "Color theme for Claude Code",
+      "enum": [
+        "dark",
+        "light",
+        "light-daltonized",
+        "dark-daltonized"
+      ],
+      "examples": [
+        "dark"
+      ]
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Whether to show full bash and command outputs",
+      "default": false,
+      "examples": [
+        true
+      ]
+    }
+  },
+  "examples": [
+    {
+      "model": "claude-3-5-sonnet-20241022",
+      "cleanupPeriodDays": 20,
+      "includeCoAuthoredBy": false,
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "true"
+      },
+      "permissions": {
+        "allow": [
+          "Bash(git diff:*)",
+          "Read",
+          "Write"
+        ],
+        "deny": [
+          "WebFetch",
+          "Bash(curl:*)"
+        ],
+        "additionalDirectories": [
+          "../docs/"
+        ],
+        "defaultMode": "acceptEdits"
+      },
+      "hooks": {
+        "PreToolUse": {
+          "Bash": "echo 'Running command...'"
+        },
+        "PostToolUse": {
+          "Edit": "prettier --write $CLAUDE_EDITED_FILE"
+        }
+      }
+    }
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(pnpm build:*)"
+    ]
+  }
+}

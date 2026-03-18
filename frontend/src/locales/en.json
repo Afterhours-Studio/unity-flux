@@ -1,0 +1,25 @@
+{
+  "app": {
+    "title": "Unity Flux",
+    "dashboard": "Dashboard"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "schemas": "Schemas",
+    "entries": "Entries",
+    "versions": "Versions",
+    "settings": "Settings"
+  },
+  "schemas": {
+    "title": "Schema Builder",
+    "description": "Define and manage your game data structures."
+  },
+  "entries": {
+    "title": "Data Editor",
+    "description": "Edit game configuration entries."
+  },
+  "versions": {
+    "title": "Version Manager",
+    "description": "Publish, compare, and rollback configuration versions."
+  }
+}
