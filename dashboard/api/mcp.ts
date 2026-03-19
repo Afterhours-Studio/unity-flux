@@ -3,15 +3,27 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import * as db from './lib/supabase-server.js'
+import { verifyAccessToken } from './lib/oauth.js'
 
 const MCP_API_KEY = process.env.FLUX_MCP_API_KEY
 
-function checkAuth(req: VercelRequest): boolean {
-  if (!MCP_API_KEY) return true // No key configured = open (dev)
+async function checkAuth(req: VercelRequest): Promise<boolean> {
   const auth = req.headers.authorization
   if (!auth) return false
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth
-  return token === MCP_API_KEY
+
+  // Try OAuth JWT first
+  try {
+    await verifyAccessToken(token)
+    return true
+  } catch {
+    // Fall through to legacy API key
+  }
+
+  // Legacy: static API key
+  if (MCP_API_KEY && token === MCP_API_KEY) return true
+
+  return false
 }
 
 function registerTools(server: McpServer) {
@@ -128,12 +140,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
 
+  if (req.method === 'DELETE') {
+    // MCP session cleanup — just acknowledge
+    return res.status(200).json({ ok: true })
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST for MCP.' })
   }
 
-  if (!checkAuth(req)) {
-    return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <api-key> header.' })
+  const authed = await checkAuth(req)
+  if (!authed) {
+    res.setHeader('WWW-Authenticate', 'Bearer resource_metadata="https://flux.h1dr0n.org/.well-known/oauth-protected-resource"')
+    return res.status(401).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Unauthorized' },
+      id: null,
+    })
   }
 
   try {
