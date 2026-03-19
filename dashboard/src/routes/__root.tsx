@@ -18,6 +18,7 @@ function RootComponent() {
   const location = useLocation()
   const navigate = useNavigate()
   const isLoginPage = location.pathname === '/login'
+  const isAuthPage = location.pathname.startsWith('/auth')
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
   const initialize = useAuthStore((s) => s.initialize)
@@ -31,7 +32,7 @@ function RootComponent() {
 
   useEffect(() => {
     if (!loading && initialized) {
-      if (!user && !isLoginPage) {
+      if (!user && !isLoginPage && !isAuthPage) {
         navigate({ to: '/login' })
       } else if (user && isLoginPage) {
         navigate({ to: '/' })
@@ -52,10 +53,10 @@ function RootComponent() {
     )
   }
 
-  if (!user && !isLoginPage) return null
+  if (!user && !isLoginPage && !isAuthPage) return null
   if (user && isLoginPage) return null
 
-  if (isLoginPage) {
+  if (isLoginPage || isAuthPage) {
     return (
       <>
         <Outlet />
