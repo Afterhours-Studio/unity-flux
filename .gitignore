@@ -25,8 +25,11 @@ Desktop.ini
 
 # Build artifacts
 *.tsbuildinfo
+.tanstack/
+.pnpm-debug.log*
 
 # Subdirectories specific
-*/node_modules/
-*/dist/
+**/node_modules/
+**/dist/
+**/dist-ssr/
 dashboard/src/routeTree.gen.ts
