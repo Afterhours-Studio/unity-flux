@@ -1,0 +1,22 @@
+{
+  "name": "com.h1dr0n.unity-flux",
+  "version": "0.0.1",
+  "displayName": "Unity Flux",
+  "description": "Over-the-air game configuration sync for Unity. Fetch, cache, and access typed config data with offline resilience.",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/user/unity-flux#readme",
+  "license": "Polyform Strict License 1.0.0",
+  "author": {
+    "name": "h1dr0n"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "config",
+    "sync",
+    "ota",
+    "game-data",
+    "remote-config"
+  ]
+}

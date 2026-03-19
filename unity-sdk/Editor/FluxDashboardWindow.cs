@@ -1,0 +1,601 @@
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+
+namespace UnityFlux.Editor
+{
+    public class FluxDashboardWindow : EditorWindow
+    {
+        private FluxConfig _config;
+        private int _tabIndex;
+        private Vector2 _scrollPos;
+        private string _syncResult;
+        private MessageType _syncResultType;
+        private SerializedObject _serializedConfig;
+        private string _testResult;
+        private MessageType _testResultType;
+
+        private static readonly string[] Tabs = { "Status", "Config", "Tables", "Sync" };
+        private static readonly Color Accent = new(0.92f, 0.68f, 0.2f);
+
+        // Colors
+        private static Color HeaderBg => Pro ? C(0.15f) : C(0.82f);
+        private static Color TabBarBg => Pro ? C(0.18f) : C(0.85f);
+        private static Color ActiveTabBg => Pro ? C(0.22f) : C(0.93f);
+        private static Color CardBg => Pro ? C(0.25f) : C(0.96f);
+        private static Color SepColor => Pro ? C(0.3f) : C(0.75f);
+        private static Color MutedText => Pro ? C(0.55f) : C(0.4f);
+        private static bool Pro => EditorGUIUtility.isProSkin;
+        private static Color C(float v) => new(v, v, v);
+
+        public static void ShowWindow()
+        {
+            var window = GetWindow<FluxDashboardWindow>("Unity Flux");
+            window.minSize = new Vector2(460, 400);
+            window.Show();
+        }
+
+        private void OnEnable() => FindConfig();
+
+        private void FindConfig()
+        {
+            var guids = AssetDatabase.FindAssets("t:FluxConfig");
+            if (guids.Length > 0)
+                _config = AssetDatabase.LoadAssetAtPath<FluxConfig>(AssetDatabase.GUIDToAssetPath(guids[0]));
+        }
+
+        // ─── Main Layout ─────────────────────────────────
+
+        private void OnGUI()
+        {
+            DrawHeader();
+            GUILayout.Space(1);
+            DrawTabBar();
+
+            _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
+            GUILayout.Space(8);
+
+            if (_config == null)
+            {
+                DrawEmptyState();
+            }
+            else
+            {
+                switch (_tabIndex)
+                {
+                    case 0: DrawStatusTab(); break;
+                    case 1: DrawConfigTab(); break;
+                    case 2: DrawTablesTab(); break;
+                    case 3: DrawSyncTab(); break;
+                }
+            }
+
+            GUILayout.Space(8);
+            EditorGUILayout.EndScrollView();
+        }
+
+        // ─── Header ──────────────────────────────────────
+
+        private void DrawHeader()
+        {
+            var rect = GUILayoutUtility.GetRect(0, 32, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(rect, HeaderBg);
+
+            // Status dot (left)
+            var state = FluxManager.Instance.State;
+            var dotColor = state switch
+            {
+                FluxState.Ready => new Color(0.3f, 0.8f, 0.45f),
+                FluxState.Syncing => new Color(0.95f, 0.75f, 0.15f),
+                FluxState.Initializing => new Color(0.95f, 0.75f, 0.15f),
+                FluxState.Error => new Color(0.9f, 0.3f, 0.3f),
+                _ => MutedText,
+            };
+            if (Event.current.type == EventType.Repaint)
+            {
+                var dotRect = new Rect(rect.x + 12, rect.y + rect.height / 2 - 4, 8, 8);
+                // Draw circle via 2 overlapping rects (simple approximation)
+                EditorGUI.DrawRect(new Rect(dotRect.x + 1, dotRect.y, 6, 8), dotColor);
+                EditorGUI.DrawRect(new Rect(dotRect.x, dotRect.y + 1, 8, 6), dotColor);
+            }
+
+            // Centered title
+            var titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 13,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Accent },
+            };
+            GUI.Label(rect, "Unity Flux", titleStyle);
+
+            // Config selector row
+            GUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(12);
+            EditorGUILayout.LabelField("Config", GUILayout.Width(42));
+            EditorGUI.BeginChangeCheck();
+            _config = (FluxConfig)EditorGUILayout.ObjectField(_config, typeof(FluxConfig), false);
+            if (EditorGUI.EndChangeCheck())
+                _serializedConfig = null;
+            GUILayout.Space(12);
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(2);
+        }
+
+        // ─── Tab Bar ─────────────────────────────────────
+
+        private void DrawTabBar()
+        {
+            var barRect = GUILayoutUtility.GetRect(0, 30, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(barRect, TabBarBg);
+
+            var tabW = barRect.width / Tabs.Length;
+            for (int i = 0; i < Tabs.Length; i++)
+            {
+                var tabRect = new Rect(barRect.x + i * tabW, barRect.y, tabW, barRect.height);
+                bool active = _tabIndex == i;
+
+                if (Event.current.type == EventType.Repaint)
+                {
+                    if (active)
+                    {
+                        // Active tab bg matches content
+                        EditorGUI.DrawRect(tabRect, ActiveTabBg);
+                        // Accent underline
+                        EditorGUI.DrawRect(new Rect(tabRect.x + 4, tabRect.yMax - 2, tabRect.width - 8, 2), Accent);
+                    }
+                }
+
+                var style = new GUIStyle(EditorStyles.label)
+                {
+                    fontSize = 11,
+                    fontStyle = active ? FontStyle.Bold : FontStyle.Normal,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = active ? (Pro ? Color.white : C(0.1f)) : MutedText },
+                };
+
+                if (GUI.Button(tabRect, Tabs[i], style))
+                    _tabIndex = i;
+
+                EditorGUIUtility.AddCursorRect(tabRect, MouseCursor.Link);
+            }
+        }
+
+        // ─── Empty State ─────────────────────────────────
+
+        private void DrawEmptyState()
+        {
+            GUILayout.Space(40);
+            var center = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleCenter, fontSize = 12 };
+            GUILayout.Label("No FluxConfig asset found", center);
+            GUILayout.Space(8);
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Create FluxConfig Asset", GUILayout.Height(28), GUILayout.Width(200)))
+            {
+                var asset = ScriptableObject.CreateInstance<FluxConfig>();
+                var path = "Assets/FluxConfig.asset";
+                AssetDatabase.CreateAsset(asset, AssetDatabase.GenerateUniqueAssetPath(path));
+                AssetDatabase.SaveAssets();
+                _config = asset;
+                _serializedConfig = null;
+                EditorGUIUtility.PingObject(asset);
+                Selection.activeObject = asset;
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4);
+            var hint = new GUIStyle(EditorStyles.centeredGreyMiniLabel) { wordWrap = true };
+            GUILayout.Label("Or drag a FluxConfig asset into the field above.", hint);
+        }
+
+        // ─── Status Tab ──────────────────────────────────
+
+        private void DrawStatusTab()
+        {
+            BeginSection("Connection");
+            DrawRow("Server URL", _config.ServerUrl ?? "(not set)");
+            DrawRow("Project ID", _config.ProjectId ?? "(not set)");
+            DrawRow("Slug", _config.ProjectSlug ?? "(not set)");
+            DrawRow("Environment", _config.EnvironmentString ?? "development");
+            EndSection();
+
+            BeginSection("Runtime");
+            DrawRow("State", FluxManager.Instance.State.ToString());
+            DrawRow("Version", FluxManager.Instance.CurrentVersion ?? "(none)");
+            DrawRow("Data Ready", Flux.IsReady ? "Yes" : "No");
+            if (Flux.IsReady)
+                DrawRow("Tables", Flux.GetTableNames().Count().ToString());
+            EndSection();
+
+            BeginSection("Cache");
+            var pid = _config.ProjectId;
+            bool cacheExists = false;
+            if (!string.IsNullOrEmpty(pid))
+            {
+                var cachePath = System.IO.Path.Combine(
+                    Application.persistentDataPath, "UnityFlux", pid,
+                    _config.EnvironmentString ?? "development");
+                DrawRow("Path", cachePath);
+                cacheExists = System.IO.Directory.Exists(cachePath);
+                DrawRow("Status", cacheExists ? "Cached" : "Empty");
+            }
+            else
+            {
+                DrawRow("Path", "(set Project ID first)");
+            }
+            if (cacheExists)
+            {
+                GUILayout.Space(4);
+                if (GUILayout.Button("Clear Cache", GUILayout.Height(22)))
+                {
+                    FluxManager.Instance.ClearCache();
+                    _syncResult = "Cache cleared";
+                    _syncResultType = MessageType.Info;
+                }
+            }
+            EndSection();
+        }
+
+        // ─── Config Tab ──────────────────────────────────
+
+        private void DrawConfigTab()
+        {
+            if (_serializedConfig == null || _serializedConfig.targetObject != _config)
+                _serializedConfig = new SerializedObject(_config);
+            _serializedConfig.Update();
+
+            BeginSection("Project");
+            DrawProp("_projectId", "Project ID");
+            DrawProp("_projectSlug", "Project Slug");
+            DrawProp("_environment", "Environment");
+            EndSection();
+
+            BeginSection("Connection");
+            DrawProp("_serverUrl", "Server URL");
+            DrawProp("_cdnBaseUrl", "CDN URL");
+            EndSection();
+
+            BeginSection("Authentication");
+            DrawProp("_anonKey", "Anonymous Key");
+            EndSection();
+
+            _serializedConfig.ApplyModifiedProperties();
+
+            GUILayout.Space(4);
+            Indent(() =>
+            {
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Test Connection", GUILayout.Height(26)))
+                    TestConnection();
+                if (GUILayout.Button("Open Dashboard", GUILayout.Height(26)))
+                    Application.OpenURL("http://localhost:5173");
+                EditorGUILayout.EndHorizontal();
+            });
+
+            if (!string.IsNullOrEmpty(_testResult))
+            {
+                GUILayout.Space(4);
+                Indent(() => EditorGUILayout.HelpBox(_testResult, _testResultType));
+            }
+        }
+
+        private void DrawProp(string propName, string label)
+        {
+            var prop = _serializedConfig.FindProperty(propName);
+            if (prop != null)
+                EditorGUILayout.PropertyField(prop, new GUIContent(label));
+        }
+
+        private async void TestConnection()
+        {
+            _testResult = "Testing...";
+            _testResultType = MessageType.Info;
+            Repaint();
+            try
+            {
+                var request = UnityEngine.Networking.UnityWebRequest.Get($"{_config.ServerUrl}/api/status");
+                var op = request.SendWebRequest();
+                while (!op.isDone) await System.Threading.Tasks.Task.Yield();
+                _testResult = request.result == UnityEngine.Networking.UnityWebRequest.Result.Success
+                    ? $"Connected to {_config.ServerUrl}"
+                    : $"Failed: {request.error}";
+                _testResultType = request.result == UnityEngine.Networking.UnityWebRequest.Result.Success
+                    ? MessageType.Info : MessageType.Error;
+            }
+            catch (System.Exception ex)
+            {
+                _testResult = $"Error: {ex.Message}";
+                _testResultType = MessageType.Error;
+            }
+            Repaint();
+        }
+
+        // ─── Tables Tab ──────────────────────────────────
+
+        private void DrawTablesTab()
+        {
+            if (!Flux.IsReady)
+            {
+                GUILayout.Space(30);
+                var center = new GUIStyle(EditorStyles.label)
+                {
+                    alignment = TextAnchor.MiddleCenter, wordWrap = true, fontSize = 11,
+                    normal = { textColor = MutedText },
+                };
+                GUILayout.Label("No data loaded.\nGo to Sync tab and initialize first.", center);
+                return;
+            }
+
+            var tables = Flux.GetTableNames().ToList();
+            BeginSection($"Tables - {tables.Count}");
+
+            foreach (var name in tables)
+            {
+                var isConfig = FluxManager.Instance.DataStore.IsConfigTable(name);
+
+                // Card
+                var cardRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(28));
+                if (Event.current.type == EventType.Repaint)
+                    EditorGUI.DrawRect(cardRect, CardBg);
+
+                GUILayout.Space(8);
+
+                // Badge
+                var badgeColor = isConfig ? new Color(0.55f, 0.35f, 0.85f) : new Color(0.2f, 0.55f, 0.85f);
+                var badgeRect2 = GUILayoutUtility.GetRect(34, 16);
+                badgeRect2.y += 6;
+                if (Event.current.type == EventType.Repaint)
+                    EditorGUI.DrawRect(badgeRect2, new Color(badgeColor.r, badgeColor.g, badgeColor.b, 0.25f));
+                var bs = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    fontSize = 8, fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = badgeColor },
+                };
+                GUI.Label(badgeRect2, isConfig ? "CFG" : "DATA", bs);
+
+                GUILayout.Space(6);
+                GUILayout.Label(name, EditorStyles.boldLabel);
+                GUILayout.FlexibleSpace();
+
+                var json = Flux.GetRawJson(name);
+                if (json != null)
+                {
+                    var count = Newtonsoft.Json.Linq.JArray.Parse(json).Count;
+                    var rowStyle = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedText } };
+                    GUILayout.Label($"{count} rows", rowStyle);
+                }
+                GUILayout.Space(8);
+
+                EditorGUILayout.EndHorizontal();
+                GUILayout.Space(2);
+            }
+
+            EndSection();
+        }
+
+        // ─── Sync Tab ────────────────────────────────────
+
+        private void DrawSyncTab()
+        {
+            BeginSection("Sync Operations");
+
+            var desc = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedText }, wordWrap = true };
+            GUILayout.Label("Load cached data or fetch latest config from server.", desc);
+            GUILayout.Space(8);
+
+            if (GUILayout.Button("Initialize (Load Cache)", GUILayout.Height(28)))
+            {
+                RunAsync(async () =>
+                {
+                    FluxManager.Instance.Configure(_config);
+                    await FluxManager.Instance.InitializeAsync();
+                    _syncResult = $"Initialized. Version: {FluxManager.Instance.CurrentVersion ?? "none"}";
+                    _syncResultType = MessageType.Info;
+                });
+            }
+
+            GUILayout.Space(4);
+
+            var prevBg = GUI.backgroundColor;
+            GUI.backgroundColor = Accent;
+            if (GUILayout.Button("Sync (Check & Download)", GUILayout.Height(32)))
+            {
+                RunAsync(async () =>
+                {
+                    FluxManager.Instance.Configure(_config);
+                    await FluxManager.Instance.InitializeAsync();
+                    var updated = await FluxManager.Instance.SyncAsync();
+                    _syncResult = updated
+                        ? $"Updated to {FluxManager.Instance.CurrentVersion}"
+                        : "Already up to date";
+                    _syncResultType = MessageType.Info;
+                });
+            }
+            GUI.backgroundColor = prevBg;
+
+            GUILayout.Space(4);
+
+            if (GUILayout.Button("Force Refresh", GUILayout.Height(22)))
+            {
+                RunAsync(async () =>
+                {
+                    FluxManager.Instance.Configure(_config);
+                    await FluxManager.Instance.ForceRefreshAsync();
+                    _syncResult = $"Force refreshed to {FluxManager.Instance.CurrentVersion}";
+                    _syncResultType = MessageType.Info;
+                });
+            }
+
+            EndSection();
+
+            BeginSection("Codegen");
+            var codeDesc = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedText }, wordWrap = true };
+            GUILayout.Label("Download auto-generated C# classes from dashboard.", codeDesc);
+            GUILayout.Space(4);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Namespace", GUILayout.Width(72));
+            _codegenNamespace = EditorGUILayout.TextField(_codegenNamespace);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Save to", GUILayout.Width(72));
+            _codegenPath = EditorGUILayout.TextField(_codegenPath);
+            if (GUILayout.Button("...", GUILayout.Width(28)))
+            {
+                var folder = EditorUtility.OpenFolderPanel("Save codegen", "Assets", "");
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    // Convert absolute to Assets-relative
+                    if (folder.StartsWith(Application.dataPath))
+                        _codegenPath = "Assets" + folder.Substring(Application.dataPath.Length);
+                    else
+                        _codegenPath = folder;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+            if (GUILayout.Button("Download C# Classes", GUILayout.Height(26)))
+            {
+                FetchCodegen();
+            }
+            EndSection();
+
+            if (!string.IsNullOrEmpty(_syncResult))
+            {
+                GUILayout.Space(4);
+                Indent(() => EditorGUILayout.HelpBox(_syncResult, _syncResultType));
+            }
+        }
+
+        private string _codegenNamespace = "GameConfig";
+        private string _codegenPath = "Assets/Scripts/Generated";
+
+        private async void FetchCodegen()
+        {
+            if (string.IsNullOrEmpty(_config.ProjectId))
+            {
+                _syncResult = "Set Project ID first";
+                _syncResultType = MessageType.Error;
+                Repaint();
+                return;
+            }
+
+            _syncResult = "Downloading codegen...";
+            _syncResultType = MessageType.Info;
+            Repaint();
+
+            try
+            {
+                var url = $"{_config.ServerUrl}/api/projects/{_config.ProjectId}/codegen?namespace={UnityEngine.Networking.UnityWebRequest.EscapeURL(_codegenNamespace)}";
+                var request = UnityEngine.Networking.UnityWebRequest.Get(url);
+                var op = request.SendWebRequest();
+                while (!op.isDone) await System.Threading.Tasks.Task.Yield();
+
+                if (request.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
+                {
+                    _syncResult = $"Failed: {request.error}";
+                    _syncResultType = MessageType.Error;
+                    Repaint();
+                    return;
+                }
+
+                var code = request.downloadHandler.text;
+
+                // Ensure directory
+                if (!System.IO.Directory.Exists(_codegenPath))
+                    System.IO.Directory.CreateDirectory(_codegenPath);
+
+                var filePath = System.IO.Path.Combine(_codegenPath, $"{_codegenNamespace}.cs");
+                System.IO.File.WriteAllText(filePath, code);
+                AssetDatabase.Refresh();
+
+                _syncResult = $"Saved to {filePath}";
+                _syncResultType = MessageType.Info;
+
+                // Ping the file
+                var asset = AssetDatabase.LoadAssetAtPath<Object>(filePath);
+                if (asset != null) EditorGUIUtility.PingObject(asset);
+            }
+            catch (System.Exception ex)
+            {
+                _syncResult = $"Error: {ex.Message}";
+                _syncResultType = MessageType.Error;
+            }
+            Repaint();
+        }
+
+        // ─── UI Primitives ───────────────────────────────
+
+        private static void BeginSection(string title)
+        {
+            GUILayout.BeginVertical();
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(12);
+            GUILayout.Label(title, EditorStyles.boldLabel);
+            GUILayout.EndHorizontal();
+
+            // Separator line
+            var lineRect = GUILayoutUtility.GetRect(0, 1, GUILayout.ExpandWidth(true));
+            lineRect.x += 12;
+            lineRect.width -= 24;
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(lineRect, SepColor);
+
+            GUILayout.Space(6);
+            GUILayout.BeginVertical();
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(16); // left indent
+            GUILayout.BeginVertical();
+        }
+
+        private static void EndSection()
+        {
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            GUILayout.Space(8);
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawRow(string label, string value)
+        {
+            EditorGUILayout.BeginHorizontal();
+            var labelStyle = new GUIStyle(EditorStyles.label) { normal = { textColor = MutedText } };
+            EditorGUILayout.LabelField(label, labelStyle, GUILayout.Width(90));
+            var valStyle = new GUIStyle(EditorStyles.label) { wordWrap = true };
+            EditorGUILayout.LabelField(value, valStyle);
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private static void Indent(System.Action content)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(12);
+            GUILayout.BeginVertical();
+            content();
+            GUILayout.EndVertical();
+            GUILayout.Space(12);
+            GUILayout.EndHorizontal();
+        }
+
+        private async void RunAsync(System.Func<System.Threading.Tasks.Task> action)
+        {
+            _syncResult = "Working...";
+            _syncResultType = MessageType.Info;
+            Repaint();
+            try { await action(); }
+            catch (System.Exception ex)
+            {
+                _syncResult = $"Error: {ex.Message}";
+                _syncResultType = MessageType.Error;
+            }
+            Repaint();
+        }
+    }
+}

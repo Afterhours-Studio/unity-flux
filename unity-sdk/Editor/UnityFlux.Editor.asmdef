@@ -1,0 +1,19 @@
+{
+  "name": "UnityFlux.Editor",
+  "rootNamespace": "UnityFlux.Editor",
+  "references": [
+    "UnityFlux.Runtime",
+    "Newtonsoft.Json"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
