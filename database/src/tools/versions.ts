@@ -1,13 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JsonStore } from '../store/json-store.js'
+import type { DataStore } from '../store/data-store.js'
 
 const environmentEnum = z.enum(['development', 'staging', 'production'])
 
-export function registerVersionTools(server: McpServer, store: JsonStore) {
+export function registerVersionTools(server: McpServer, store: DataStore) {
   server.tool('list_versions', 'List all versions for a project', { projectId: z.string() }, async ({ projectId }) => {
     try {
-      const versions = store.listVersions(projectId)
+      const versions = await store.listVersions(projectId)
       return { content: [{ type: 'text' as const, text: JSON.stringify(versions, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -23,7 +23,7 @@ export function registerVersionTools(server: McpServer, store: JsonStore) {
     },
     async ({ projectId, environment }) => {
       try {
-        const version = store.publishVersion(projectId, environment)
+        const version = await store.publishVersion(projectId, environment)
         return { content: [{ type: 'text' as const, text: JSON.stringify(version, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -40,7 +40,7 @@ export function registerVersionTools(server: McpServer, store: JsonStore) {
     },
     async ({ versionId, targetEnvironment }) => {
       try {
-        const version = store.promoteVersion(versionId, targetEnvironment)
+        const version = await store.promoteVersion(versionId, targetEnvironment)
         return { content: [{ type: 'text' as const, text: JSON.stringify(version, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -50,7 +50,7 @@ export function registerVersionTools(server: McpServer, store: JsonStore) {
 
   server.tool('rollback_version', 'Rollback to a previous version', { versionId: z.string() }, async ({ versionId }) => {
     try {
-      const version = store.rollbackVersion(versionId)
+      const version = await store.rollbackVersion(versionId)
       return { content: [{ type: 'text' as const, text: JSON.stringify(version, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -59,7 +59,7 @@ export function registerVersionTools(server: McpServer, store: JsonStore) {
 
   server.tool('delete_version', 'Delete a version by ID', { versionId: z.string() }, async ({ versionId }) => {
     try {
-      store.deleteVersion(versionId)
+      await store.deleteVersion(versionId)
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, versionId }, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -75,7 +75,7 @@ export function registerVersionTools(server: McpServer, store: JsonStore) {
     },
     async ({ versionId1, versionId2 }) => {
       try {
-        const diff = store.compareVersions(versionId1, versionId2)
+        const diff = await store.compareVersions(versionId1, versionId2)
         return { content: [{ type: 'text' as const, text: JSON.stringify(diff, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }

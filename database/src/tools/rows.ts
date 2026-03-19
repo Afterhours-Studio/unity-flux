@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JsonStore } from '../store/json-store.js'
+import type { DataStore } from '../store/data-store.js'
 
-export function registerRowTools(server: McpServer, store: JsonStore) {
+export function registerRowTools(server: McpServer, store: DataStore) {
   server.tool('list_rows', 'List all rows (entries) in a table', { tableId: z.string() }, async ({ tableId }) => {
     try {
-      const entries = store.listEntries(tableId)
+      const entries = await store.listEntries(tableId)
       return { content: [{ type: 'text' as const, text: JSON.stringify(entries, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -14,7 +14,7 @@ export function registerRowTools(server: McpServer, store: JsonStore) {
 
   server.tool('get_row', 'Get a single row (entry) by ID', { rowId: z.string() }, async ({ rowId }) => {
     try {
-      const entry = store.getEntry(rowId)
+      const entry = await store.getEntry(rowId)
       return { content: [{ type: 'text' as const, text: JSON.stringify(entry, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -31,7 +31,7 @@ export function registerRowTools(server: McpServer, store: JsonStore) {
     },
     async ({ tableId, data, environment }) => {
       try {
-        const entry = store.createEntry(tableId, data, environment)
+        const entry = await store.createEntry(tableId, data, environment)
         return { content: [{ type: 'text' as const, text: JSON.stringify(entry, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -48,7 +48,7 @@ export function registerRowTools(server: McpServer, store: JsonStore) {
     },
     async ({ rowId, data }) => {
       try {
-        const entry = store.updateEntry(rowId, data)
+        const entry = await store.updateEntry(rowId, data)
         return { content: [{ type: 'text' as const, text: JSON.stringify(entry, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -58,7 +58,7 @@ export function registerRowTools(server: McpServer, store: JsonStore) {
 
   server.tool('delete_row', 'Delete a row (entry) by ID', { rowId: z.string() }, async ({ rowId }) => {
     try {
-      store.deleteEntry(rowId)
+      await store.deleteEntry(rowId)
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, rowId }, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }

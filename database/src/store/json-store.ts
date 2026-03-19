@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
+import type { DataStore } from './data-store.js'
 import type { StoreData, Project, Schema, SchemaField, DataEntry, Version, VersionDiff, VersionTableDiff, ActivityLog, Environment } from './types.js'
 import { generateId, generateProjectId, generateApiKey, generateAnonKey } from '../util/id.js'
 import { nextVersionTag } from '../util/version-tag.js'
@@ -7,7 +8,7 @@ function makeActivity(projectId: string, type: ActivityLog['type'], message: str
   return { id: generateId(), projectId, type, message, createdAt: new Date().toISOString() }
 }
 
-export class JsonStore {
+export class JsonStore implements DataStore {
   constructor(private filePath: string) {}
 
   private read(): StoreData {
@@ -26,15 +27,15 @@ export class JsonStore {
 
   // === PROJECTS ===
 
-  listProjects(): Project[] {
+  async listProjects() {
     return this.read().projects
   }
 
-  getProject(id: string): Project | null {
+  async getProject(id: string) {
     return this.read().projects.find(p => p.id === id) ?? null
   }
 
-  createProject(name: string, description: string): Project {
+  async createProject(name: string, description: string) {
     const data = this.read()
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     const now = new Date().toISOString()
@@ -56,7 +57,7 @@ export class JsonStore {
     return project
   }
 
-  updateProject(id: string, updates: Partial<Pick<Project, 'name' | 'description' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>>): Project {
+  async updateProject(id: string, updates: Partial<Pick<Project, 'name' | 'description' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>>) {
     const data = this.read()
     const idx = data.projects.findIndex(p => p.id === id)
     if (idx === -1) throw new Error(`Project not found: ${id}`)
@@ -65,7 +66,16 @@ export class JsonStore {
     return data.projects[idx]
   }
 
-  deleteProject(id: string): void {
+  async regenerateApiKey(id: string) {
+    const data = this.read()
+    const idx = data.projects.findIndex(p => p.id === id)
+    if (idx === -1) throw new Error(`Project not found: ${id}`)
+    data.projects[idx] = { ...data.projects[idx], apiKey: generateApiKey(), updatedAt: new Date().toISOString() }
+    this.write(data)
+    return data.projects[idx]
+  }
+
+  async deleteProject(id: string) {
     const data = this.read()
     const schemaIds = data.schemas.filter(s => s.projectId === id).map(s => s.id)
     data.projects = data.projects.filter(p => p.id !== id)
@@ -78,15 +88,15 @@ export class JsonStore {
 
   // === SCHEMAS (tables) ===
 
-  listSchemas(projectId: string): Schema[] {
+  async listSchemas(projectId: string) {
     return this.read().schemas.filter(s => s.projectId === projectId)
   }
 
-  getSchema(id: string): Schema | null {
+  async getSchema(id: string) {
     return this.read().schemas.find(s => s.id === id) ?? null
   }
 
-  createSchema(projectId: string, name: string, fields: SchemaField[], mode: Schema['mode'] = 'data'): Schema {
+  async createSchema(projectId: string, name: string, fields: SchemaField[], mode: Schema['mode'] = 'data') {
     const data = this.read()
     const now = new Date().toISOString()
     const defaultConfigFields: SchemaField[] = [
@@ -112,7 +122,7 @@ export class JsonStore {
     return schema
   }
 
-  renameSchema(id: string, name: string): Schema {
+  async renameSchema(id: string, name: string) {
     const data = this.read()
     const idx = data.schemas.findIndex(s => s.id === id)
     if (idx === -1) throw new Error(`Schema not found: ${id}`)
@@ -121,7 +131,18 @@ export class JsonStore {
     return data.schemas[idx]
   }
 
-  deleteSchema(id: string): void {
+  async updateSchema(id: string, updates: Partial<Pick<Schema, 'name' | 'fields'>>) {
+    const data = this.read()
+    const idx = data.schemas.findIndex(s => s.id === id)
+    if (idx === -1) throw new Error(`Schema not found: ${id}`)
+    if (updates.name !== undefined) data.schemas[idx].name = updates.name
+    if (updates.fields !== undefined) data.schemas[idx].fields = updates.fields
+    data.schemas[idx].updatedAt = new Date().toISOString()
+    this.write(data)
+    return data.schemas[idx]
+  }
+
+  async deleteSchema(id: string) {
     const data = this.read()
     const schema = data.schemas.find(s => s.id === id)
     data.schemas = data.schemas.filter(s => s.id !== id)
@@ -134,7 +155,7 @@ export class JsonStore {
 
   // === COLUMNS ===
 
-  addColumn(schemaId: string, field: SchemaField): Schema {
+  async addColumn(schemaId: string, field: SchemaField) {
     const data = this.read()
     const idx = data.schemas.findIndex(s => s.id === schemaId)
     if (idx === -1) throw new Error(`Schema not found: ${schemaId}`)
@@ -145,7 +166,7 @@ export class JsonStore {
     return data.schemas[idx]
   }
 
-  updateColumn(schemaId: string, columnName: string, updates: Partial<SchemaField>): Schema {
+  async updateColumn(schemaId: string, columnName: string, updates: Partial<SchemaField>) {
     const data = this.read()
     const idx = data.schemas.findIndex(s => s.id === schemaId)
     if (idx === -1) throw new Error(`Schema not found: ${schemaId}`)
@@ -158,7 +179,7 @@ export class JsonStore {
     return data.schemas[idx]
   }
 
-  removeColumn(schemaId: string, columnName: string): Schema {
+  async removeColumn(schemaId: string, columnName: string) {
     const data = this.read()
     const idx = data.schemas.findIndex(s => s.id === schemaId)
     if (idx === -1) throw new Error(`Schema not found: ${schemaId}`)
@@ -171,15 +192,15 @@ export class JsonStore {
 
   // === ENTRIES (rows) ===
 
-  listEntries(schemaId: string): DataEntry[] {
+  async listEntries(schemaId: string) {
     return this.read().entries.filter(e => e.schemaId === schemaId)
   }
 
-  getEntry(id: string): DataEntry | null {
+  async getEntry(id: string) {
     return this.read().entries.find(e => e.id === id) ?? null
   }
 
-  createEntry(schemaId: string, entryData: Record<string, unknown>, environment: Environment = 'development'): DataEntry {
+  async createEntry(schemaId: string, entryData: Record<string, unknown>, environment: Environment = 'development') {
     const data = this.read()
     const now = new Date().toISOString()
     const entry: DataEntry = {
@@ -200,7 +221,7 @@ export class JsonStore {
     return entry
   }
 
-  updateEntry(id: string, entryData: Record<string, unknown>): DataEntry {
+  async updateEntry(id: string, entryData: Record<string, unknown>) {
     const data = this.read()
     const idx = data.entries.findIndex(e => e.id === id)
     if (idx === -1) throw new Error(`Entry not found: ${id}`)
@@ -209,7 +230,7 @@ export class JsonStore {
     return data.entries[idx]
   }
 
-  deleteEntry(id: string): void {
+  async deleteEntry(id: string) {
     const data = this.read()
     const entry = data.entries.find(e => e.id === id)
     const schema = entry ? data.schemas.find(s => s.id === entry.schemaId) : undefined
@@ -222,13 +243,13 @@ export class JsonStore {
 
   // === VERSIONS ===
 
-  listVersions(projectId: string): Version[] {
+  async listVersions(projectId: string) {
     return this.read().versions
       .filter(v => v.projectId === projectId)
       .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
   }
 
-  publishVersion(projectId: string, environment: Environment): Version {
+  async publishVersion(projectId: string, environment: Environment) {
     const data = this.read()
     const projectSchemas = data.schemas.filter(s => s.projectId === projectId)
 
@@ -271,7 +292,7 @@ export class JsonStore {
     return version
   }
 
-  promoteVersion(versionId: string, targetEnv: Environment): Version {
+  async promoteVersion(versionId: string, targetEnv: Environment) {
     const data = this.read()
     const source = data.versions.find(v => v.id === versionId)
     if (!source) throw new Error(`Version not found: ${versionId}`)
@@ -303,7 +324,7 @@ export class JsonStore {
     return version
   }
 
-  rollbackVersion(versionId: string): void {
+  async rollbackVersion(versionId: string) {
     const data = this.read()
     const target = data.versions.find(v => v.id === versionId)
     if (!target) return
@@ -320,13 +341,13 @@ export class JsonStore {
     this.write(data)
   }
 
-  deleteVersion(versionId: string): void {
+  async deleteVersion(versionId: string) {
     const data = this.read()
     data.versions = data.versions.filter(v => v.id !== versionId)
     this.write(data)
   }
 
-  compareVersions(v1Id: string, v2Id: string): VersionDiff {
+  async compareVersions(v1Id: string, v2Id: string) {
     const data = this.read()
     const v1 = data.versions.find(v => v.id === v1Id)
     const v2 = data.versions.find(v => v.id === v2Id)
@@ -408,7 +429,7 @@ export class JsonStore {
 
   // === ACTIVITY ===
 
-  listActivity(projectId: string, limit?: number): ActivityLog[] {
+  async listActivity(projectId: string, limit?: number) {
     const activities = this.read().activities
       .filter(a => a.projectId === projectId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

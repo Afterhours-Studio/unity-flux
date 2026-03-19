@@ -18,5 +18,22 @@ services:
       timeout: 3s
       retries: 5
 
+  server:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-0.0.0}
+    container_name: unity-flux-server
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      STORAGE_PROVIDER: postgres
+      DATABASE_URL: postgresql://flux:flux_local_dev@postgres:5432/unity_flux
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JsonStore } from '../store/json-store.js'
+import type { DataStore } from '../store/data-store.js'
 
 const TYPE_MAP: Record<string, string> = {
   string: 'string',
@@ -109,7 +109,7 @@ function generateLoaderClass(): string {
   return lines.join('\n')
 }
 
-export function registerCodegenTools(server: McpServer, store: JsonStore) {
+export function registerCodegenTools(server: McpServer, store: DataStore) {
   server.tool(
     'generate_csharp',
     'Generate C# data classes for all schemas in a project',
@@ -119,7 +119,7 @@ export function registerCodegenTools(server: McpServer, store: JsonStore) {
     },
     async ({ projectId, namespace }) => {
       try {
-        const schemas = store.listSchemas(projectId)
+        const schemas = await store.listSchemas(projectId)
 
         if (schemas.length === 0) {
           return {

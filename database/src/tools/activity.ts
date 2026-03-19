@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JsonStore } from '../store/json-store.js'
+import type { DataStore } from '../store/data-store.js'
 
-export function registerActivityTools(server: McpServer, store: JsonStore) {
+export function registerActivityTools(server: McpServer, store: DataStore) {
   server.tool(
     'list_activity',
     'List recent activity log entries for a project',
@@ -12,7 +12,7 @@ export function registerActivityTools(server: McpServer, store: JsonStore) {
     },
     async ({ projectId, limit }) => {
       try {
-        const activity = store.listActivity(projectId, limit)
+        const activity = await store.listActivity(projectId, limit)
         return { content: [{ type: 'text' as const, text: JSON.stringify(activity, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }

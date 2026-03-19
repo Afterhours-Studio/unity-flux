@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JsonStore } from '../store/json-store.js'
+import type { DataStore } from '../store/data-store.js'
 
-export function registerProjectTools(server: McpServer, store: JsonStore) {
+export function registerProjectTools(server: McpServer, store: DataStore) {
   server.tool('list_projects', 'List all projects', {}, async () => {
     try {
-      const projects = store.listProjects()
+      const projects = await store.listProjects()
       return { content: [{ type: 'text' as const, text: JSON.stringify(projects, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -14,7 +14,7 @@ export function registerProjectTools(server: McpServer, store: JsonStore) {
 
   server.tool('get_project', 'Get a project by ID', { projectId: z.string() }, async ({ projectId }) => {
     try {
-      const project = store.getProject(projectId)
+      const project = await store.getProject(projectId)
       return { content: [{ type: 'text' as const, text: JSON.stringify(project, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -30,7 +30,7 @@ export function registerProjectTools(server: McpServer, store: JsonStore) {
     },
     async ({ name, description }) => {
       try {
-        const project = store.createProject(name, description)
+        const project = await store.createProject(name, description)
         return { content: [{ type: 'text' as const, text: JSON.stringify(project, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -57,7 +57,7 @@ export function registerProjectTools(server: McpServer, store: JsonStore) {
         if (supabaseUrl !== undefined) updates.supabaseUrl = supabaseUrl
         if (r2BucketUrl !== undefined) updates.r2BucketUrl = r2BucketUrl
         if (environment !== undefined) updates.environment = environment
-        const project = store.updateProject(projectId, updates)
+        const project = await store.updateProject(projectId, updates)
         return { content: [{ type: 'text' as const, text: JSON.stringify(project, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
@@ -67,7 +67,7 @@ export function registerProjectTools(server: McpServer, store: JsonStore) {
 
   server.tool('delete_project', 'Delete a project by ID', { projectId: z.string() }, async ({ projectId }) => {
     try {
-      store.deleteProject(projectId)
+      await store.deleteProject(projectId)
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, projectId }, null, 2) }] }
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
