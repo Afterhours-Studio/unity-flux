@@ -1,20 +1,20 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import * as db from './lib/supabase-server.js'
 
 const MCP_API_KEY = process.env.FLUX_MCP_API_KEY
 
-function checkAuth(req: Request): boolean {
+function checkAuth(req: VercelRequest): boolean {
   if (!MCP_API_KEY) return true // No key configured = open (dev)
-  const auth = req.headers.get('authorization')
+  const auth = req.headers.authorization
   if (!auth) return false
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth
   return token === MCP_API_KEY
 }
 
 function registerTools(server: McpServer) {
-  // Helper to register a tool and return JSON text content
   const tool = (
     name: string,
     description: string,
@@ -75,10 +75,10 @@ function registerTools(server: McpServer) {
   tool('list_rows', 'List rows in a table', { tableId: z.string() }, ({ tableId }) => db.listEntries(tableId as string))
   tool('get_row', 'Get a row by ID', { rowId: z.string() }, ({ rowId }) => db.getEntry(rowId as string))
   tool('add_row', 'Add a row to a table', {
-    tableId: z.string(), data: z.record(z.unknown()),
+    tableId: z.string(), data: z.record(z.string(), z.unknown()),
     environment: z.enum(['development', 'staging', 'production']).optional().default('development'),
   }, ({ tableId, data, environment }) => db.createEntry(tableId as string, data as Record<string, unknown>, environment as any))
-  tool('update_row', 'Update a row', { rowId: z.string(), data: z.record(z.unknown()) },
+  tool('update_row', 'Update a row', { rowId: z.string(), data: z.record(z.string(), z.unknown()) },
     ({ rowId, data }) => db.updateEntry(rowId as string, data as Record<string, unknown>))
   tool('delete_row', 'Delete a row', { rowId: z.string() },
     async ({ rowId }) => { await db.deleteEntry(rowId as string); return { ok: true } })
@@ -123,38 +123,31 @@ function registerTools(server: McpServer) {
     })
 }
 
-export const config = { runtime: 'edge' }
-
-export default async function handler(req: Request): Promise<Response> {
-  // Only POST allowed for MCP Streamable HTTP
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed. Use POST for MCP.' }), {
-      status: 405, headers: { 'Content-Type': 'application/json' },
-    })
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET') {
+    return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
 
-  // Auth check
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST for MCP.' })
+  }
+
   if (!checkAuth(req)) {
-    return new Response(JSON.stringify({ error: 'Unauthorized. Provide Authorization: Bearer <api-key> header.' }), {
-      status: 401, headers: { 'Content-Type': 'application/json' },
-    })
+    return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <api-key> header.' })
   }
 
   try {
     const server = new McpServer({ name: 'unity-flux', version: '0.1.0' })
     registerTools(server)
 
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    })
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+    res.on('close', () => transport.close())
     await server.connect(transport)
-
-    return await transport.handleRequest(req)
+    await transport.handleRequest(req, res, req.body)
   } catch (err) {
     console.error('MCP error:', err)
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal server error' }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
-    })
+    if (!res.headersSent) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' })
+    }
   }
 }

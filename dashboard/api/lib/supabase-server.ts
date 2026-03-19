@@ -124,9 +124,9 @@ async function insertActivity(projectId: string, type: string, message: string) 
 async function getAdminUserId(): Promise<string> {
   const { data } = await supabase.from('user_profiles').select('id').eq('role', 'admin').limit(1).single()
   if (data) return data.id
-  // Fallback: get first user
-  const { data: users } = await supabase.auth.admin.listUsers({ perPage: 1 })
-  if (users?.users?.[0]) return users.users[0].id
+  // Fallback: get any user profile
+  const { data: anyUser } = await supabase.from('user_profiles').select('id').limit(1).single()
+  if (anyUser) return anyUser.id
   throw new Error('No admin user found')
 }
 
