@@ -1,14 +1,13 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
 import * as db from './lib/supabase-server.js'
 
 const MCP_API_KEY = process.env.FLUX_MCP_API_KEY
 
-function checkAuth(req: VercelRequest): boolean {
+function checkAuth(req: Request): boolean {
   if (!MCP_API_KEY) return true // No key configured = open (dev)
-  const auth = req.headers.authorization
+  const auth = req.headers.get('authorization')
   if (!auth) return false
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth
   return token === MCP_API_KEY
@@ -124,29 +123,38 @@ function registerTools(server: McpServer) {
     })
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export const config = { runtime: 'edge' }
+
+export default async function handler(req: Request): Promise<Response> {
   // Only POST allowed for MCP Streamable HTTP
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed. Use POST for MCP.' })
+    return new Response(JSON.stringify({ error: 'Method not allowed. Use POST for MCP.' }), {
+      status: 405, headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Auth check
   if (!checkAuth(req)) {
-    return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <api-key> header.' })
+    return new Response(JSON.stringify({ error: 'Unauthorized. Provide Authorization: Bearer <api-key> header.' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   try {
     const server = new McpServer({ name: 'unity-flux', version: '0.1.0' })
     registerTools(server)
 
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    res.on('close', () => transport.close())
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    })
     await server.connect(transport)
-    await transport.handleRequest(req, res, req.body)
+
+    return await transport.handleRequest(req)
   } catch (err) {
     console.error('MCP error:', err)
-    if (!res.headersSent) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' })
-    }
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Internal server error' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    })
   }
 }
