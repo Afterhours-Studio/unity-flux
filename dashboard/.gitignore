@@ -25,3 +25,5 @@ dist-ssr
 
 # TanStack Router generated route tree
 src/routeTree.gen.ts
+
+.vercel

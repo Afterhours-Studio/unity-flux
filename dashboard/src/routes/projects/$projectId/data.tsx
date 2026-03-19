@@ -49,7 +49,7 @@ import { useProjectStore } from '@/stores/project-store'
 import { toast } from 'sonner'
 import type { SchemaField } from '@/types/project'
 import { PageTransition } from '@/components/motion'
-import { TABLE_TEMPLATES, type TableTemplate } from '@/lib/table-templates'
+import { TABLE_TEMPLATES } from '@/lib/table-templates'
 import { HexColorPicker } from 'react-colorful'
 import { validateSchema, getCellErrors, type ValidationError } from '@/lib/validation'
 

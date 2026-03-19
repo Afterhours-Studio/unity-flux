@@ -304,9 +304,10 @@ function PromoteDialog({
     targets[0],
   )
 
-  const activeInTarget = allVersions.find(
+  const _activeInTarget_unused = allVersions.find(
     (v) => v.environment === targetEnv && v.status === 'active',
   )
+  void _activeInTarget_unused
 
   const handlePromote = () => {
     const v = promoteVersion(version.id, targetEnv)
@@ -1022,7 +1023,7 @@ function VersionsPage() {
           animate="visible"
         >
           {filtered.map((version) => {
-            const currentActive = versions.find(
+            void versions.find(
               (v) =>
                 v.environment === version.environment &&
                 v.status === 'active' &&

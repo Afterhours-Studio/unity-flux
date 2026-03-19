@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { LogOut, Sun, Moon, Bell, User } from 'lucide-react'
+import { LogOut, Sun, Moon, Bell, User, Plug } from 'lucide-react'
+import { useMcpStore, mcpClient } from '@/lib/mcp-client'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +31,13 @@ export function TopBar() {
   const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
   const [profileOpen, setProfileOpen] = useState(false)
+  const mcpStatus = useMcpStore((s) => s.status)
+  const lastToolCall = useMcpStore((s) => s.lastToolCall)
+
+  useEffect(() => {
+    mcpClient.connect()
+    return () => mcpClient.disconnect()
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -69,6 +77,53 @@ export function TopBar() {
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
+          {/* MCP Status */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="relative flex h-9 items-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title={`MCP: ${mcpStatus}`}
+              >
+                <Plug className="h-3.5 w-3.5 text-muted-foreground" />
+                <div
+                  className={`h-2 w-2 rounded-full ${
+                    mcpStatus === 'connected'
+                      ? 'bg-emerald-500'
+                      : mcpStatus === 'executing'
+                        ? 'bg-amber-500 animate-pulse'
+                        : 'bg-muted-foreground/30'
+                  }`}
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>MCP Connection</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-2 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={`font-medium ${mcpStatus === 'connected' ? 'text-emerald-500' : mcpStatus === 'executing' ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                    {mcpStatus === 'connected' ? 'Connected' : mcpStatus === 'executing' ? 'Executing...' : 'Disconnected'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Endpoint</span>
+                  <code className="text-xs text-muted-foreground">ws://localhost:3001/ws</code>
+                </div>
+                {lastToolCall && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Last tool</span>
+                    <code className="text-xs">{lastToolCall.name}</code>
+                  </div>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                AI agents control the dashboard via MCP. Changes appear in the UI for you to review before saving.
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -2,7 +2,7 @@ import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
 import { Copy, Download, Code, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+// import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProjectStore } from '@/stores/project-store'
@@ -76,7 +76,7 @@ function generateEnumBlock(
   return `${indent}public enum ${enumName}\n${indent}{\n${members}\n${indent}}\n\n`
 }
 
-function generateDataClass(schema: Schema, namespace: string): string {
+function generateDataClass(schema: Schema, _namespace: string): string {
   const className = toPascalCase(schema.name)
   const indent = '    '
 
