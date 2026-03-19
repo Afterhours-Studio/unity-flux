@@ -39,18 +39,19 @@ export function TopBar() {
     return () => mcpClient.disconnect()
   }, [])
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate({ to: '/login' })
   }
 
-  const initials =
-    user?.displayName
-      ?.split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) ?? '?'
+  const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || '?'
+  const userEmail = user?.email || ''
+  const initials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || '?'
 
   const isDark =
     theme === 'dark' ||
@@ -160,9 +161,9 @@ export function TopBar() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-normal flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">{user?.displayName}</p>
+                  <p className="text-sm font-medium">{displayName}</p>
                   <p className="text-xs text-muted-foreground">
-                    @{user?.username}
+                    {userEmail}
                   </p>
                 </div>
                 <button
@@ -222,43 +223,38 @@ export function TopBar() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-1">
-                <p className="font-medium">{user?.displayName}</p>
+                <p className="font-medium">{displayName}</p>
                 <p className="text-sm text-muted-foreground">
-                  @{user?.username}
+                  {userEmail}
                 </p>
               </div>
             </div>
 
             <Separator />
 
-            {/* Editable fields */}
+            {/* Info fields */}
             <div className="grid gap-3">
               <div className="grid gap-1.5">
                 <Label className="text-xs text-muted-foreground">
                   Display Name
                 </Label>
                 <Input
-                  value={user?.displayName ?? ''}
+                  value={displayName}
                   readOnly
                   className="text-sm"
                 />
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs text-muted-foreground">
-                  Username
+                  Email
                 </Label>
                 <Input
-                  value={user?.username ?? ''}
+                  value={userEmail}
                   readOnly
                   className="text-sm"
                 />
               </div>
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              Account management will be available when Supabase Auth is
-              connected.
-            </p>
           </div>
           <div className="px-6 pb-6 pt-2 flex justify-end">
             <Button variant="outline" onClick={() => setProfileOpen(false)}>

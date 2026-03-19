@@ -1,48 +1,46 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
-interface User {
-  username: string
-  displayName: string
-  avatar?: string
-}
+import type { User, Session } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 
 interface AuthStore {
   user: User | null
-  login: (username: string, password: string) => boolean
-  logout: () => void
+  session: Session | null
+  loading: boolean
+  initialize: () => Promise<void>
+  login: (email: string, password: string) => Promise<{ error: string | null }>
+  logout: () => Promise<void>
 }
 
-const TEST_ACCOUNTS: Record<string, { password: string; user: User }> = {
-  admin: {
-    password: 'admin',
-    user: {
-      username: 'admin',
-      displayName: 'Admin',
-    },
+export const useAuthStore = create<AuthStore>()((set) => ({
+  user: null,
+  session: null,
+  loading: true,
+
+  initialize: async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    set({
+      session,
+      user: session?.user ?? null,
+      loading: false,
+    })
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      set({
+        session,
+        user: session?.user ?? null,
+        loading: false,
+      })
+    })
   },
-}
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set) => ({
-      user: null,
+  login: async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { error: error.message }
+    return { error: null }
+  },
 
-      login: (username, password) => {
-        const account = TEST_ACCOUNTS[username]
-        if (account && account.password === password) {
-          set({ user: account.user })
-          return true
-        }
-        return false
-      },
-
-      logout: () => {
-        set({ user: null })
-      },
-    }),
-    {
-      name: 'unity-flux-auth',
-    },
-  ),
-)
+  logout: async () => {
+    await supabase.auth.signOut()
+    set({ user: null, session: null })
+  },
+}))

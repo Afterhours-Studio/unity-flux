@@ -1,30 +1,59 @@
-import { createRootRouteWithContext, Outlet, useLocation, redirect } from '@tanstack/react-router'
+import { createRootRouteWithContext, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import type { QueryClient } from '@tanstack/react-query'
 import { AppLayout } from '@/app/layout'
 import { useAuthStore } from '@/stores/auth-store'
+import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
 interface RouterContext {
   queryClient: QueryClient
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  beforeLoad: ({ location }) => {
-    const user = useAuthStore.getState().user
-    const isLoginPage = location.pathname === '/login'
-
-    if (!user && !isLoginPage) {
-      throw redirect({ to: '/login' })
-    } else if (user && isLoginPage) {
-      throw redirect({ to: '/' })
-    }
-  },
   component: RootComponent,
 })
 
 function RootComponent() {
   const location = useLocation()
+  const navigate = useNavigate()
   const isLoginPage = location.pathname === '/login'
+  const user = useAuthStore((s) => s.user)
+  const loading = useAuthStore((s) => s.loading)
+  const initialize = useAuthStore((s) => s.initialize)
+  const [initialized, setInitialized] = useState(false)
+
+  useEffect(() => {
+    if (!initialized) {
+      initialize().then(() => setInitialized(true))
+    }
+  }, [initialize, initialized])
+
+  useEffect(() => {
+    if (!loading && initialized) {
+      if (!user && !isLoginPage) {
+        navigate({ to: '/login' })
+      } else if (user && isLoginPage) {
+        navigate({ to: '/' })
+      }
+    }
+  }, [user, loading, initialized, isLoginPage, navigate])
+
+  if (loading || !initialized) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground text-lg font-bold shadow-lg">
+            UF
+          </div>
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!user && !isLoginPage) return null
+  if (user && isLoginPage) return null
 
   if (isLoginPage) {
     return (
