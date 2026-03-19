@@ -118,7 +118,7 @@ class McpClient {
     }, 3000)
   }
 
-  private handleToolCall(requestId: string, name: string, params: Record<string, unknown>) {
+  private async handleToolCall(requestId: string, name: string, params: Record<string, unknown>) {
     useMcpStore.getState().setStatus('executing')
 
     const executor = toolExecutors[name]
@@ -129,7 +129,7 @@ class McpClient {
     }
 
     try {
-      const result = executor(params)
+      const result = await executor(params)
       this.send({ requestId, result })
       useMcpStore.getState().setLastToolCall(name)
     } catch (e) {

@@ -1,7 +1,8 @@
 import { createFileRoute, Outlet, Link, useParams } from '@tanstack/react-router'
 import { Database, History, KeyRound, ArrowLeft, Settings, Code } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useProjectStore } from '@/stores/project-store'
+import { useProject } from '@/hooks/use-projects'
+import { Loader2 } from 'lucide-react'
 import { motion } from '@/components/motion'
 import { useState, useCallback, useRef, useEffect } from 'react'
 
@@ -65,8 +66,16 @@ function useSidebarResize() {
 
 function ProjectLayout() {
   const { projectId } = useParams({ from: '/projects/$projectId' })
-  const project = useProjectStore((s) => s.getProject(projectId))
+  const { data: project, isLoading } = useProject(projectId)
   const { width: sidebarWidth, onMouseDown } = useSidebarResize()
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (!project) {
     return (

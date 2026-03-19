@@ -1,21 +1,28 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Plus, Gamepad2, Calendar, ArrowRight } from 'lucide-react'
+import { Plus, Gamepad2, Calendar, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useProjectStore } from '@/stores/project-store'
 import { CreateProjectDialog } from '@/features/projects/create-project-dialog'
-import { generateSeedData } from '@/lib/seed-data'
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { PageTransition, motion, staggerContainer, staggerItem } from '@/components/motion'
+import { useProjects } from '@/hooks/use-projects'
 
 export const Route = createFileRoute('/')({
   component: ProjectListPage,
 })
 
 function ProjectListPage() {
-  const projects = useProjectStore((s) => s.projects)
+  const { data: projects = [], isLoading } = useProjects()
   const [createOpen, setCreateOpen] = useState(false)
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <PageTransition className="p-6 max-w-6xl mx-auto">
@@ -48,22 +55,10 @@ function ProjectListPage() {
                 Create your first project to start managing game configurations
                 with over-the-air updates.
               </p>
-              <div className="flex gap-3">
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Project
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    useProjectStore.setState(generateSeedData())
-                    window.location.reload()
-                  }}
-                >
-                  <Gamepad2 className="h-4 w-4 mr-2" />
-                  Load Demo Data
-                </Button>
-              </div>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
             </CardContent>
           </Card>
         </motion.div>

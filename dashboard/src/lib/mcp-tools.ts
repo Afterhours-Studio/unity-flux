@@ -1,63 +1,53 @@
-import { useProjectStore } from '@/stores/project-store'
+import * as db from '@/lib/supabase-data'
 import type { SchemaField } from '@/types/project'
 
-type ToolFn = (params: Record<string, unknown>) => unknown
-
-function store() {
-  return useProjectStore.getState()
-}
+type ToolFn = (params: Record<string, unknown>) => Promise<unknown>
 
 /**
- * Maps MCP tool names → Zustand store actions.
- * All execution happens in-browser, modifying dashboard state.
+ * Maps MCP tool names → Supabase data layer (async).
+ * All execution happens in-browser, calling Supabase directly.
  */
 export const toolExecutors: Record<string, ToolFn> = {
   // ─── Projects ───────────────────────────────────────
-  list_projects: () => store().projects,
+  list_projects: () => db.listProjects(),
 
-  get_project: ({ projectId }) => store().getProject(projectId as string) ?? null,
+  get_project: ({ projectId }) => db.getProject(projectId as string),
 
   create_project: ({ name, description }) =>
-    store().addProject(name as string, (description as string) ?? ''),
+    db.createProject(name as string, (description as string) ?? ''),
 
-  update_project: ({ projectId, ...updates }) => {
-    store().updateProject(projectId as string, updates)
-    return store().getProject(projectId as string)
+  update_project: async ({ projectId, ...updates }) => {
+    return db.updateProject(projectId as string, updates)
   },
 
-  delete_project: ({ projectId }) => {
-    store().deleteProject(projectId as string)
+  delete_project: async ({ projectId }) => {
+    await db.deleteProject(projectId as string)
     return { ok: true }
   },
 
   // ─── Tables ─────────────────────────────────────────
-  list_tables: ({ projectId }) => store().getSchemasByProject(projectId as string),
+  list_tables: ({ projectId }) => db.listSchemas(projectId as string),
 
-  get_table: ({ tableId }) =>
-    store().schemas.find((s) => s.id === tableId) ?? null,
+  get_table: ({ tableId }) => db.getSchema(tableId as string),
 
   create_table: ({ projectId, name, columns, mode }) =>
-    store().addSchema(
+    db.createSchema(
       projectId as string,
       name as string,
       (columns as SchemaField[]) ?? [],
       (mode as 'data' | 'config') ?? 'data',
     ),
 
-  rename_table: ({ tableId, name }) => {
-    store().updateSchema(tableId as string, { name: name as string })
-    return store().schemas.find((s) => s.id === tableId)
-  },
+  rename_table: ({ tableId, name }) =>
+    db.renameSchema(tableId as string, name as string),
 
-  delete_table: ({ tableId }) => {
-    store().deleteSchema(tableId as string)
+  delete_table: async ({ tableId }) => {
+    await db.deleteSchema(tableId as string)
     return { ok: true }
   },
 
   // ─── Columns ────────────────────────────────────────
   add_column: ({ tableId, name, type, required, values, configRef }) => {
-    const schema = store().schemas.find((s) => s.id === tableId)
-    if (!schema) throw new Error(`Table not found: ${tableId}`)
     const field: SchemaField = {
       name: name as string,
       type: type as SchemaField['type'],
@@ -65,91 +55,69 @@ export const toolExecutors: Record<string, ToolFn> = {
       ...(values ? { values: values as string[] } : {}),
       ...(configRef ? { configRef: configRef as string } : {}),
     }
-    store().updateSchema(tableId as string, {
-      fields: [...schema.fields, field],
-    })
-    return store().schemas.find((s) => s.id === tableId)
+    return db.addColumn(tableId as string, field)
   },
 
-  update_column: ({ tableId, columnName, ...updates }) => {
-    const schema = store().schemas.find((s) => s.id === tableId)
-    if (!schema) throw new Error(`Table not found: ${tableId}`)
-    const fields = schema.fields.map((f) =>
-      f.name === columnName ? { ...f, ...updates } : f,
-    )
-    store().updateSchema(tableId as string, { fields: fields as SchemaField[] })
-    return store().schemas.find((s) => s.id === tableId)
-  },
+  update_column: ({ tableId, columnName, ...updates }) =>
+    db.updateColumn(tableId as string, columnName as string, updates as Partial<SchemaField>),
 
-  remove_column: ({ tableId, columnName }) => {
-    const schema = store().schemas.find((s) => s.id === tableId)
-    if (!schema) throw new Error(`Table not found: ${tableId}`)
-    store().updateSchema(tableId as string, {
-      fields: schema.fields.filter((f) => f.name !== columnName),
-    })
-    return store().schemas.find((s) => s.id === tableId)
-  },
+  remove_column: ({ tableId, columnName }) =>
+    db.removeColumn(tableId as string, columnName as string),
 
   // ─── Rows ───────────────────────────────────────────
-  list_rows: ({ tableId }) => store().getEntriesBySchema(tableId as string),
+  list_rows: ({ tableId }) => db.listEntries(tableId as string),
 
-  get_row: ({ rowId }) =>
-    store().entries.find((e) => e.id === rowId) ?? null,
+  get_row: ({ rowId }) => db.getEntry(rowId as string),
 
   add_row: ({ tableId, data, environment }) =>
-    store().addEntry(
+    db.createEntry(
       tableId as string,
       data as Record<string, unknown>,
       (environment as 'development' | 'staging' | 'production') ?? 'development',
     ),
 
-  update_row: ({ rowId, data }) => {
-    store().updateEntry(rowId as string, data as Record<string, unknown>)
-    return store().entries.find((e) => e.id === rowId)
-  },
+  update_row: ({ rowId, data }) =>
+    db.updateEntry(rowId as string, data as Record<string, unknown>),
 
-  delete_row: ({ rowId }) => {
-    store().deleteEntry(rowId as string)
+  delete_row: async ({ rowId }) => {
+    await db.deleteEntry(rowId as string)
     return { ok: true }
   },
 
   // ─── Versions ───────────────────────────────────────
-  list_versions: ({ projectId }) =>
-    store().getVersionsByProject(projectId as string),
+  list_versions: ({ projectId }) => db.listVersions(projectId as string),
 
   publish_version: ({ projectId, environment }) =>
-    store().publishVersion(
+    db.publishVersion(
       projectId as string,
       environment as 'development' | 'staging' | 'production',
     ),
 
   promote_version: ({ versionId, targetEnvironment }) =>
-    store().promoteVersion(
+    db.promoteVersion(
       versionId as string,
       targetEnvironment as 'development' | 'staging' | 'production',
     ),
 
-  rollback_version: ({ versionId }) => {
-    store().rollbackVersion(versionId as string)
+  rollback_version: async ({ versionId }) => {
+    await db.rollbackVersion(versionId as string)
     return { ok: true }
   },
 
-  delete_version: ({ versionId }) => {
-    store().deleteVersion(versionId as string)
+  delete_version: async ({ versionId }) => {
+    await db.deleteVersion(versionId as string)
     return { ok: true }
   },
 
   compare_versions: ({ versionId1, versionId2 }) =>
-    store().compareVersions(versionId1 as string, versionId2 as string),
+    db.compareVersions(versionId1 as string, versionId2 as string),
 
   // ─── Activity ───────────────────────────────────────
-  list_activity: ({ projectId }) =>
-    store().getActivitiesByProject(projectId as string),
+  list_activity: ({ projectId }) => db.listActivity(projectId as string),
 
   // ─── Codegen ────────────────────────────────────────
-  generate_csharp_code: ({ projectId }) => {
-    const s = store()
-    const schemas = s.getSchemasByProject(projectId as string)
+  generate_csharp_code: async ({ projectId }) => {
+    const schemas = await db.listSchemas(projectId as string)
     if (schemas.length === 0) return { code: '// No tables found' }
 
     let code = '// Auto-generated by Unity Flux\n'

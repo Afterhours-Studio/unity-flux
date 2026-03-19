@@ -1,10 +1,10 @@
 import { createFileRoute, useParams, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useShallow } from 'zustand/shallow'
 import {
   Copy,
   Eye,
   EyeOff,
+  Loader2,
   RefreshCw,
   Rocket,
   ArrowUpRight,
@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { useProjectStore } from '@/stores/project-store'
+import { useProject, useUpdateProject, useRegenerateApiKey } from '@/hooks/use-projects'
+import { useActivities } from '@/hooks/use-activities'
 import type { Project } from '@/types/project'
 import { toast } from 'sonner'
 import { PageTransition } from '@/components/motion'
@@ -308,16 +309,15 @@ await FluxManager.Instance.SyncAsync();`}
 
 function ProjectOverview() {
   const { projectId } = useParams({ from: '/projects/$projectId/' })
-  const project = useProjectStore((s) => s.getProject(projectId))
-  const updateProject = useProjectStore((s) => s.updateProject)
-  const regenerateApiKey = useProjectStore((s) => s.regenerateApiKey)
-  const activities = useProjectStore(
-    useShallow((s) =>
-      s.activities
-        .filter((a) => a.projectId === projectId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, 20),
-    ),
+  const { data: project, isLoading } = useProject(projectId)
+  const updateProjectMut = useUpdateProject()
+  const regenerateApiKeyMut = useRegenerateApiKey()
+  const { data: activities = [] } = useActivities(projectId, 20)
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
   )
 
   if (!project) return null
@@ -432,8 +432,8 @@ function ProjectOverview() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 shrink-0"
-                    onClick={() => {
-                      regenerateApiKey(project.id)
+                    onClick={async () => {
+                      await regenerateApiKeyMut.mutateAsync(project.id)
                       toast.success('API key regenerated')
                     }}
                   >
@@ -467,7 +467,7 @@ function ProjectOverview() {
                   placeholder="https://your-project.supabase.co"
                   value={project.supabaseUrl}
                   onChange={(e) =>
-                    updateProject(project.id, { supabaseUrl: e.target.value })
+                    updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
                   }
                   className="text-xs h-8"
                 />
@@ -480,7 +480,7 @@ function ProjectOverview() {
                   placeholder="https://flux-cdn.yourstudio.com"
                   value={project.r2BucketUrl}
                   onChange={(e) =>
-                    updateProject(project.id, { r2BucketUrl: e.target.value })
+                    updateProjectMut.mutate({ id: project.id, updates: { r2BucketUrl: e.target.value } })
                   }
                   className="text-xs h-8"
                 />
@@ -493,7 +493,7 @@ function ProjectOverview() {
                   value={project.environment}
                   onValueChange={(
                     value: 'development' | 'staging' | 'production',
-                  ) => updateProject(project.id, { environment: value })}
+                  ) => updateProjectMut.mutate({ id: project.id, updates: { environment: value } })}
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />

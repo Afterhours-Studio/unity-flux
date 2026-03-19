@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 // import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useProjectStore } from '@/stores/project-store'
-import { useShallow } from 'zustand/shallow'
+import { useProject } from '@/hooks/use-projects'
+import { useSchemas } from '@/hooks/use-schemas'
 import { cn } from '@/lib/utils'
 import { PageTransition } from '@/components/motion'
 import { toast } from 'sonner'
@@ -265,10 +265,8 @@ function highlightCSharp(code: string): string {
 function CodegenPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/codegen' })
 
-  const project = useProjectStore((s) => s.getProject(projectId))
-  const schemas = useProjectStore(
-    useShallow((s) => s.schemas.filter((sc) => sc.projectId === projectId)),
-  )
+  const { data: project } = useProject(projectId)
+  const { data: schemas = [] } = useSchemas(projectId)
 
   const defaultNamespace = project ? toPascalCase(project.slug) : 'GameConfig'
   const [namespace, setNamespace] = useState(defaultNamespace)

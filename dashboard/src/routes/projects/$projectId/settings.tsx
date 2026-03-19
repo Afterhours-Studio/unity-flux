@@ -16,9 +16,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { useProjectStore } from '@/stores/project-store'
+import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects'
 import { toast } from 'sonner'
 import { PageTransition } from '@/components/motion'
+import { Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/projects/$projectId/settings')({
   component: ProjectSettingsPage,
@@ -26,20 +27,25 @@ export const Route = createFileRoute('/projects/$projectId/settings')({
 
 function ProjectSettingsPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/settings' })
-  const project = useProjectStore((s) => s.getProject(projectId))
-  const updateProject = useProjectStore((s) => s.updateProject)
-  const deleteProject = useProjectStore((s) => s.deleteProject)
+  const { data: project, isLoading } = useProject(projectId)
+  const updateProjectMut = useUpdateProject()
+  const deleteProjectMut = useDeleteProject()
   const navigate = useNavigate()
 
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
 
+  if (isLoading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   if (!project) return null
 
-  const handleDelete = () => {
-    deleteProject(project.id)
-    toast.success(`Project "${project.name}" deleted`)
-    navigate({ to: '/' })
+  const handleDelete = async () => {
+    try {
+      await deleteProjectMut.mutateAsync(project.id)
+      toast.success(`Project "${project.name}" deleted`)
+      navigate({ to: '/' })
+    } catch (err) {
+      toast.error(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
   const canDelete = deleteConfirm === project.slug
@@ -65,7 +71,7 @@ function ProjectSettingsPage() {
             <Input
               id="project-name"
               value={project.name}
-              onChange={(e) => updateProject(project.id, { name: e.target.value })}
+              onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { name: e.target.value } })}
             />
           </div>
           <div className="grid gap-2">
@@ -74,7 +80,7 @@ function ProjectSettingsPage() {
               id="project-desc"
               value={project.description}
               onChange={(e) =>
-                updateProject(project.id, { description: e.target.value })
+                updateProjectMut.mutate({ id: project.id, updates: { description: e.target.value } })
               }
               rows={3}
             />

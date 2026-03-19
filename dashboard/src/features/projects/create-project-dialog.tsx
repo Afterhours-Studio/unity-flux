@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { useProjectStore } from '@/stores/project-store'
+import { useCreateProject } from '@/hooks/use-projects'
 import { toast } from 'sonner'
 
 interface CreateProjectDialogProps {
@@ -23,19 +23,23 @@ interface CreateProjectDialogProps {
 export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const addProject = useProjectStore((s) => s.addProject)
+  const createProject = useCreateProject()
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
-    const project = addProject(name.trim(), description.trim())
-    toast.success(`Project "${project.name}" created`)
-    setName('')
-    setDescription('')
-    onOpenChange(false)
-    navigate({ to: '/projects/$projectId', params: { projectId: project.id } })
+    try {
+      const project = await createProject.mutateAsync({ name: name.trim(), description: description.trim() })
+      toast.success(`Project "${project.name}" created`)
+      setName('')
+      setDescription('')
+      onOpenChange(false)
+      navigate({ to: '/projects/$projectId', params: { projectId: project.id } })
+    } catch (err) {
+      toast.error(`Failed to create project: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
   return (
@@ -74,8 +78,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!name.trim()}>
-              Create Project
+            <Button type="submit" disabled={!name.trim() || createProject.isPending}>
+              {createProject.isPending ? 'Creating...' : 'Create Project'}
             </Button>
           </DialogFooter>
         </form>

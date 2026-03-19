@@ -1,6 +1,5 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useRef, useEffect } from 'react'
-import { useShallow } from 'zustand/shallow'
 import {
   Plus,
   Trash2,
@@ -13,6 +12,7 @@ import {
   Check,
   ChevronDown,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,7 +45,9 @@ import {
 } from '@/components/ui/table'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { useProjectStore } from '@/stores/project-store'
+import { useSchemas, useCreateSchema, useUpdateSchema, useDeleteSchema } from '@/hooks/use-schemas'
+import { useEntries, useCreateEntry, useUpdateEntry, useDeleteEntry } from '@/hooks/use-entries'
+import { usePublishVersion } from '@/hooks/use-versions'
 import { toast } from 'sonner'
 import type { SchemaField } from '@/types/project'
 import { PageTransition } from '@/components/motion'
@@ -1040,17 +1042,14 @@ function PublishDialog({
 
 function DataPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/data' })
-  const schemas = useProjectStore(
-    useShallow((s) => s.schemas.filter((sc) => sc.projectId === projectId)),
-  )
-  const allEntries = useProjectStore((s) => s.entries)
-  const addSchema = useProjectStore((s) => s.addSchema)
-  const updateSchema = useProjectStore((s) => s.updateSchema)
-  const deleteSchema = useProjectStore((s) => s.deleteSchema)
-  const addEntry = useProjectStore((s) => s.addEntry)
-  const updateEntry = useProjectStore((s) => s.updateEntry)
-  const deleteEntry = useProjectStore((s) => s.deleteEntry)
-  const publishVersion = useProjectStore((s) => s.publishVersion)
+  const { data: schemas = [] } = useSchemas(projectId)
+  const createSchemaMut = useCreateSchema()
+  const updateSchemaMut = useUpdateSchema()
+  const deleteSchemaMut = useDeleteSchema()
+  const createEntryMut = useCreateEntry()
+  const updateEntryMut = useUpdateEntry()
+  const deleteEntryMut = useDeleteEntry()
+  const publishVersionMut = usePublishVersion()
 
   const [selectedId, setSelectedId] = useState('')
   const [createTableOpen, setCreateTableOpen] = useState(false)
@@ -1064,7 +1063,7 @@ function DataPage() {
 
   const activeId = selectedId || schemas[0]?.id || ''
   const selectedSchema = schemas.find((s) => s.id === activeId)
-  const entries = allEntries.filter((e) => e.schemaId === activeId)
+  const { data: entries = [] } = useEntries(activeId)
 
   // Validation errors for current table
   const validationErrors: ValidationError[] = selectedSchema
@@ -1082,49 +1081,65 @@ function DataPage() {
 
   /* ── handlers ── */
 
-  const handleCreateTable = (
+  const handleCreateTable = async (
     name: string,
     mode: 'data' | 'config',
     templateFields?: SchemaField[],
     sampleRows?: Record<string, unknown>[],
   ) => {
-    const schema = addSchema(projectId, name, templateFields ?? [], mode)
-    if (sampleRows?.length) {
-      for (const row of sampleRows) {
-        addEntry(schema.id, row, 'development')
+    try {
+      const schema = await createSchemaMut.mutateAsync({ projectId, name, fields: templateFields ?? [], mode })
+      if (sampleRows?.length) {
+        for (const row of sampleRows) {
+          await createEntryMut.mutateAsync({ schemaId: schema.id, data: row, environment: 'development' })
+        }
       }
+      setSelectedId(schema.id)
+      toast.success(`Table "${name}" created`)
+    } catch (err) {
+      toast.error(`Failed to create table: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-    setSelectedId(schema.id)
-    toast.success(`Table "${name}" created`)
   }
 
-  const handleAddRow = () => {
+  const handleAddRow = async () => {
     if (!selectedSchema) return
     const defaults: Record<string, unknown> = {}
     selectedSchema.fields.forEach((f) => {
       defaults[f.name] = getDefaultValue(f)
     })
-    addEntry(selectedSchema.id, defaults, 'development')
+    try {
+      await createEntryMut.mutateAsync({ schemaId: selectedSchema.id, data: defaults, environment: 'development' })
+    } catch (err) {
+      toast.error(`Failed to add row: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleCellChange = (
+  const handleCellChange = async (
     entryId: string,
     fieldName: string,
     value: unknown,
   ) => {
-    const entry = allEntries.find((e) => e.id === entryId)
+    const entry = entries.find((e) => e.id === entryId)
     if (!entry) return
-    updateEntry(entryId, { ...entry.data, [fieldName]: value })
+    try {
+      await updateEntryMut.mutateAsync({ id: entryId, data: { ...entry.data, [fieldName]: value } })
+    } catch (err) {
+      toast.error(`Failed to update cell: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleRowDataChange = (
+  const handleRowDataChange = async (
     entryId: string,
     newData: Record<string, unknown>,
   ) => {
-    updateEntry(entryId, newData)
+    try {
+      await updateEntryMut.mutateAsync({ id: entryId, data: newData })
+    } catch (err) {
+      toast.error(`Failed to update row: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleAddEnumOption = (fieldName: string, newOption: string) => {
+  const handleAddEnumOption = async (fieldName: string, newOption: string) => {
     if (!selectedSchema) return
     const newFields = selectedSchema.fields.map((f) => {
       if (f.name === fieldName) {
@@ -1132,10 +1147,14 @@ function DataPage() {
       }
       return f
     })
-    updateSchema(selectedSchema.id, { fields: newFields })
+    try {
+      await updateSchemaMut.mutateAsync({ id: selectedSchema.id, updates: { fields: newFields } })
+    } catch (err) {
+      toast.error(`Failed to add enum option: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleRemoveEnumOption = (
+  const handleRemoveEnumOption = async (
     fieldName: string,
     optToRemove: string,
   ) => {
@@ -1149,61 +1168,79 @@ function DataPage() {
       }
       return f
     })
-    updateSchema(selectedSchema.id, { fields: newFields })
+    try {
+      await updateSchemaMut.mutateAsync({ id: selectedSchema.id, updates: { fields: newFields } })
+    } catch (err) {
+      toast.error(`Failed to remove enum option: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleAddColumn = (field: SchemaField) => {
+  const handleAddColumn = async (field: SchemaField) => {
     if (!selectedSchema) return
-    updateSchema(selectedSchema.id, {
-      fields: [...selectedSchema.fields, field],
-    })
-    toast.success(`Column "${field.name}" added`)
+    try {
+      await updateSchemaMut.mutateAsync({ id: selectedSchema.id, updates: { fields: [...selectedSchema.fields, field] } })
+      toast.success(`Column "${field.name}" added`)
+    } catch (err) {
+      toast.error(`Failed to add column: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleUpdateColumn = (index: number, field: SchemaField) => {
+  const handleUpdateColumn = async (index: number, field: SchemaField) => {
     if (!selectedSchema) return
-    const oldName = selectedSchema.fields[index].name
-    const newFields = selectedSchema.fields.map((f, i) =>
-      i === index ? field : f,
-    )
-    updateSchema(selectedSchema.id, { fields: newFields })
-    if (oldName !== field.name) {
-      allEntries
-        .filter((e) => e.schemaId === selectedSchema.id)
-        .forEach((entry) => {
+    try {
+      const oldName = selectedSchema.fields[index].name
+      const newFields = selectedSchema.fields.map((f, i) =>
+        i === index ? field : f,
+      )
+      await updateSchemaMut.mutateAsync({ id: selectedSchema.id, updates: { fields: newFields } })
+      if (oldName !== field.name) {
+        for (const entry of entries.filter((e) => e.schemaId === selectedSchema.id)) {
           if (oldName in entry.data) {
             const d = { ...entry.data }
             d[field.name] = d[oldName]
             delete d[oldName]
-            updateEntry(entry.id, d)
+            await updateEntryMut.mutateAsync({ id: entry.id, data: d })
           }
-        })
+        }
+      }
+      toast.success('Column updated')
+    } catch (err) {
+      toast.error(`Failed to update column: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-    toast.success('Column updated')
   }
 
-  const handleDeleteColumn = (index: number) => {
+  const handleDeleteColumn = async (index: number) => {
     if (!selectedSchema) return
     const name = selectedSchema.fields[index].name
-    updateSchema(selectedSchema.id, {
-      fields: selectedSchema.fields.filter((_, i) => i !== index),
-    })
-    toast.success(`Column "${name}" deleted`)
+    try {
+      await updateSchemaMut.mutateAsync({ id: selectedSchema.id, updates: { fields: selectedSchema.fields.filter((_, i) => i !== index) } })
+      toast.success(`Column "${name}" deleted`)
+    } catch (err) {
+      toast.error(`Failed to delete column: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handleDeleteTable = () => {
+  const handleDeleteTable = async () => {
     if (!selectedSchema) return
     const name = selectedSchema.name
-    deleteSchema(selectedSchema.id)
-    setSelectedId('')
-    toast.success(`Table "${name}" deleted`)
+    try {
+      await deleteSchemaMut.mutateAsync(selectedSchema.id)
+      setSelectedId('')
+      toast.success(`Table "${name}" deleted`)
+    } catch (err) {
+      toast.error(`Failed to delete table: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
-  const handlePublish = (
+  const handlePublish = async (
     env: 'development' | 'staging' | 'production',
   ) => {
-    const version = publishVersion(projectId, env)
-    toast.success(`Published ${version.versionTag} to ${env}`)
+    try {
+      const version = await publishVersionMut.mutateAsync({ projectId, environment: env })
+      toast.success(`Published ${version.versionTag} to ${env}`)
+    } catch (err) {
+      toast.error(`Failed to publish: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
   const handleExport = () => {
@@ -1233,41 +1270,45 @@ function DataPage() {
     const file = e.target.files?.[0]
     if (!file || !selectedSchema) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string
       const lines = text.trim().split('\n')
       if (lines.length < 2) return
       const headers = lines[0].split(',').map((h) => h.trim())
       let imported = 0
-      lines.slice(1).forEach((line) => {
-        if (!line.trim()) return
-        const values = line.split(',').map((v) => v.trim())
-        const data: Record<string, unknown> = {}
-        selectedSchema!.fields.forEach((field) => {
-          const col = headers.indexOf(field.name)
-          if (col >= 0 && col < values.length) {
-            const raw = values[col]
-            switch (field.type) {
-              case 'integer':
-                data[field.name] = parseInt(raw) || 0
-                break
-              case 'float':
-                data[field.name] = parseFloat(raw) || 0
-                break
-              case 'boolean':
-                data[field.name] = raw.toLowerCase() === 'true'
-                break
-              default:
-                data[field.name] = raw
+      try {
+        for (const line of lines.slice(1)) {
+          if (!line.trim()) continue
+          const values = line.split(',').map((v) => v.trim())
+          const data: Record<string, unknown> = {}
+          selectedSchema!.fields.forEach((field) => {
+            const col = headers.indexOf(field.name)
+            if (col >= 0 && col < values.length) {
+              const raw = values[col]
+              switch (field.type) {
+                case 'integer':
+                  data[field.name] = parseInt(raw) || 0
+                  break
+                case 'float':
+                  data[field.name] = parseFloat(raw) || 0
+                  break
+                case 'boolean':
+                  data[field.name] = raw.toLowerCase() === 'true'
+                  break
+                default:
+                  data[field.name] = raw
+              }
+            } else {
+              data[field.name] = getDefaultValue(field)
             }
-          } else {
-            data[field.name] = getDefaultValue(field)
-          }
-        })
-        addEntry(selectedSchema!.id, data, 'development')
-        imported++
-      })
-      toast.success(`Imported ${imported} rows`)
+          })
+          await createEntryMut.mutateAsync({ schemaId: selectedSchema!.id, data, environment: 'development' })
+          imported++
+        }
+        toast.success(`Imported ${imported} rows`)
+      } catch (err) {
+        toast.error(`Import failed after ${imported} rows: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      }
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -1532,9 +1573,13 @@ function DataPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => {
-                                  deleteEntry(entry.id)
-                                  toast.success('Row deleted')
+                                onClick={async () => {
+                                  try {
+                                    await deleteEntryMut.mutateAsync(entry.id)
+                                    toast.success('Row deleted')
+                                  } catch (err) {
+                                    toast.error(`Failed to delete row: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                                  }
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-destructive" />

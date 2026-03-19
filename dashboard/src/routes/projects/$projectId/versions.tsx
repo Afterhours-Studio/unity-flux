@@ -1,6 +1,5 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
-import { useShallow } from 'zustand/shallow'
 import {
   Tag,
   Clock,
@@ -54,9 +53,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useProjectStore } from '@/stores/project-store'
 import { toast } from 'sonner'
-import type { Version, VersionDiff } from '@/types/project'
+import type { Version } from '@/types/project'
+import {
+  useVersions,
+  usePromoteVersion,
+  useRollbackVersion,
+  useDeleteVersion,
+  useCompareVersions,
+} from '@/hooks/use-versions'
 import {
   PageTransition,
   motion,
@@ -298,7 +303,7 @@ function PromoteDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const promoteVersion = useProjectStore((s) => s.promoteVersion)
+  const promoteVersionMut = usePromoteVersion()
   const targets = ENV_LIST.filter((e) => e !== version.environment)
   const [targetEnv, setTargetEnv] = useState<Version['environment']>(
     targets[0],
@@ -309,10 +314,14 @@ function PromoteDialog({
   )
   void _activeInTarget_unused
 
-  const handlePromote = () => {
-    const v = promoteVersion(version.id, targetEnv)
-    toast.success(`Promoted to ${targetEnv} as ${v.versionTag}`)
-    onOpenChange(false)
+  const handlePromote = async () => {
+    try {
+      const v = await promoteVersionMut.mutateAsync({ versionId: version.id, targetEnv })
+      toast.success(`Promoted to ${targetEnv} as ${v.versionTag}`)
+      onOpenChange(false)
+    } catch {
+      toast.error('Failed to promote version')
+    }
   }
 
   return (
@@ -412,12 +421,16 @@ function RollbackDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const rollbackVersion = useProjectStore((s) => s.rollbackVersion)
+  const rollbackVersionMut = useRollbackVersion()
 
-  const handleRollback = () => {
-    rollbackVersion(version.id)
-    toast.success(`Rolled back to ${version.versionTag}`)
-    onOpenChange(false)
+  const handleRollback = async () => {
+    try {
+      await rollbackVersionMut.mutateAsync(version.id)
+      toast.success(`Rolled back to ${version.versionTag}`)
+      onOpenChange(false)
+    } catch {
+      toast.error('Failed to rollback version')
+    }
   }
 
   return (
@@ -491,12 +504,16 @@ function DeleteVersionDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const deleteVersion = useProjectStore((s) => s.deleteVersion)
+  const deleteVersionMut = useDeleteVersion()
 
-  const handleDelete = () => {
-    deleteVersion(version.id)
-    toast.success(`Deleted ${version.versionTag}`)
-    onOpenChange(false)
+  const handleDelete = async () => {
+    try {
+      await deleteVersionMut.mutateAsync(version.id)
+      toast.success(`Deleted ${version.versionTag}`)
+      onOpenChange(false)
+    } catch {
+      toast.error('Failed to delete version')
+    }
   }
 
   return (
@@ -554,19 +571,9 @@ function CompareDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const compareVersions = useProjectStore((s) => s.compareVersions)
   const [v1Id, setV1Id] = useState(preselectedId ?? '')
   const [v2Id, setV2Id] = useState('')
-  const [diff, setDiff] = useState<VersionDiff | null>(null)
-
-  const handleCompare = () => {
-    if (!v1Id || !v2Id) return
-    try {
-      setDiff(compareVersions(v1Id, v2Id))
-    } catch {
-      toast.error('Failed to compare versions')
-    }
-  }
+  const { data: diff = null, isLoading: isComparing } = useCompareVersions(v1Id, v2Id)
 
   const v1 = allVersions.find((v) => v.id === v1Id)
   const v2 = allVersions.find((v) => v.id === v2Id)
@@ -575,7 +582,7 @@ function CompareDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) setDiff(null)
+        if (!o) { setV1Id(preselectedId ?? ''); setV2Id('') }
         onOpenChange(o)
       }}
     >
@@ -639,11 +646,10 @@ function CompareDialog({
           </div>
           <Button
             size="sm"
-            onClick={handleCompare}
-            disabled={!v1Id || !v2Id}
+            disabled={!v1Id || !v2Id || isComparing}
             className="mb-0"
           >
-            Compare
+            {isComparing ? 'Comparing…' : 'Compare'}
           </Button>
         </div>
 
@@ -810,6 +816,11 @@ function CompareDialog({
                 </p>
               )}
             </>
+          ) : isComparing ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+              <p className="text-sm text-muted-foreground">Comparing versions…</p>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
               Select two versions and click Compare to see the diff.
@@ -827,13 +838,7 @@ function CompareDialog({
 
 function VersionsPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/versions' })
-  const versions = useProjectStore(
-    useShallow((s) =>
-      s.versions
-        .filter((v) => v.projectId === projectId)
-        .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
-    ),
-  )
+  const { data: versions = [] } = useVersions(projectId)
 
   // Filters
   const [filterEnv, setFilterEnv] = useState('all')
