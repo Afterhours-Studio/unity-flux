@@ -33,3 +33,4 @@ Desktop.ini
 **/dist/
 **/dist-ssr/
 dashboard/src/routeTree.gen.ts
+dashboard/*.txt
