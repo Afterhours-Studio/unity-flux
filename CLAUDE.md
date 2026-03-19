@@ -11,8 +11,7 @@ Unity Flux is a game data sync platform for delivering over-the-air configuratio
 ```
 unity-flux/
   dashboard/         # React dashboard (Vite 8, React 19, TanStack, shadcn/ui, Tailwind v4)
-  mcp-server/        # MCP server + REST API (Express, TypeScript, 25 MCP tools)
-  database/          # Docker PostgreSQL (docker-compose.yml + init SQL)
+  database/          # Docker PostgreSQL + REST API + MCP WebSocket proxy
   unity-sdk/         # Unity C# SDK package
   documents/         # Architecture documentation (01-09)
   ROADMAP.md         # Phase 1 (local) + Phase 2 (cloud) development plan
@@ -22,8 +21,8 @@ unity-flux/
 
 Focus: Dashboard UI + Unity SDK + Docker PostgreSQL + MCP. No cloud services required.
 
-- **Dashboard**: React app for managing game config tables, publishing versions, generating C# code
-- **MCP Server**: Express server at `/mcp` (MCP tools) + `/api` (REST for dashboard). Uses local JSON store (migrating to Docker PostgreSQL)
+- **Dashboard**: React app for managing game config tables, publishing versions, generating C# code. MCP tool logic runs here (Zustand state).
+- **Database**: Docker PostgreSQL + Express server at `/api` (REST) + `/mcp` (MCP proxy via WebSocket to dashboard)
 - **Unity SDK**: C# package (planned) for fetching configs + local caching
 
 Phase 2 will add Supabase + Cloudflare R2 + Vercel deployment. Each project will toggle between local and cloud storage.
@@ -32,7 +31,7 @@ Phase 2 will add Supabase + Cloudflare R2 + Vercel deployment. Each project will
 
 ```
 Dashboard (React) --> REST API /api --> Local Database
-AI Agents         --> MCP /mcp     --> Local Database
+AI Agents         --> MCP /mcp     --> WebSocket --> Dashboard (Zustand) --> REST API --> DB
 Unity SDK         --> Config API   --> Local Database
 ```
 
@@ -50,8 +49,8 @@ Unity SDK         --> Config API   --> Local Database
 # Dashboard
 cd dashboard && pnpm dev         # http://localhost:5173
 
-# MCP Server
-cd mcp-server && pnpm dev        # http://localhost:3001
+# Database + API Server
+cd database && pnpm dev          # http://localhost:3001
 ```
 
 ## Conventions

@@ -22,33 +22,37 @@ Each project supports a **storage toggle** — choose local or cloud per project
 ### Architecture
 
 ```
-+-----------------+     +-----------------+     +-----------------+
-|   Dashboard     |     |   MCP Server    |     |   Unity SDK     |
-|   (React)       |     |   (Express)     |     |   (C#)          |
-+--------+--------+     +--------+--------+     +--------+--------+
-         |                       |                       |
-         v                       v                       v
-+-------------------+   +-------------------+   +-------------------+
-|    REST API       |   |    MCP Tools      |   |   Config API      |
-|    /api/*         |   |    /mcp           |   |   /config/*       |
-+--------+----------+   +--------+----------+   +--------+----------+
-         |                       |                       |
-         +----------+------------+-----------+-----------+
-                    |                        |
-           +-------v--------+      +--------v--------+
-           | Docker         |      | Local File      |
-           | PostgreSQL     |      | Server          |
-           | (port 5432)    |      | (configs)       |
-           +----------------+      +-----------------+
++---------------------------+                  +-----------------+
+|   Dashboard (React)       |                  |   Unity SDK     |
+|   + MCP tool executors    |                  |   (C#)          |
++--------+--------+--------+                  +--------+--------+
+         |        ^                                    |
+         |        | WebSocket                          |
+         v        v                                    v
++-------------------------------------------+  +------------------+
+|   Database Server (Docker)                |  | Config API       |
+|   REST API /api  +  MCP proxy /mcp  + WS  |  | /config/*        |
++--------+----------------------------------+  +--------+---------+
+         |                                             |
+         v                                             v
++-------------------+                         +-----------------+
+| Docker PostgreSQL |                         | Local File      |
+| (port 5432)       |                         | Server          |
++-------------------+                         +-----------------+
+
+Flow:
+  User edits     → Dashboard Zustand → Save → REST API → DB
+  AI Agent       → POST /mcp → WS proxy → Dashboard Zustand (draft)
+                   User reviews → Save → REST API → DB
 ```
 
 ### Components
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| Dashboard | React + Vite + TanStack + shadcn/ui | In progress |
-| MCP Server | Express + 25 MCP tools + REST API | In progress |
-| Docker DB | PostgreSQL via Docker Compose | Planned |
+| Dashboard | React + Vite + TanStack + shadcn/ui + MCP tools | In progress |
+| Database Server | Express + REST API + MCP WebSocket proxy | In progress |
+| Docker DB | PostgreSQL via Docker Compose | Done |
 | Unity SDK | C# package, local server fetch | Planned |
 | Data Validation | Type check, range, pre-publish gate | Done |
 | Table Templates | 9 built-in templates | Done |
@@ -160,8 +164,30 @@ Project Settings > Storage Provider
 | Auth | Local accounts | Supabase Auth (Google, Facebook) |
 | Config delivery | Local server | Cloudflare R2 CDN |
 | Dashboard host | localhost | Vercel |
-| MCP Server host | localhost | Cloud Run / Railway |
+| MCP transport | WebSocket (localhost) | Supabase Realtime channels |
+| MCP endpoint | Docker server `/mcp` | Vercel API route `/api/mcp` |
 | Cost | Free (local) | Free tier (Supabase + R2 + Vercel) |
+
+### MCP in Phase 2 (Cloud)
+
+Phase 1: MCP tool calls go through a WebSocket proxy on the local Docker server.
+Phase 2: No dedicated server needed. MCP uses **Supabase Realtime** as transport:
+
+```
+AI Agent → POST /api/mcp (Vercel API route)
+                ↓
+         Supabase Realtime channel (publish tool_call)
+                ↓
+         Dashboard (subscribed) executes tool in Zustand state
+                ↓
+         Supabase Realtime channel (publish tool_response)
+                ↓
+         Vercel API route returns response to AI Agent
+```
+
+- Dashboard MCP client code stays the same — only swap transport (WebSocket → Supabase Realtime)
+- Vercel API route is a thin serverless proxy (~50 lines)
+- No dedicated backend server needed for MCP in cloud mode
 
 ### New Features (Phase 2 only)
 - Supabase Auth integration (social logins for Unity clients)
@@ -170,16 +196,18 @@ Project Settings > Storage Provider
 - Global CDN delivery with zero egress costs
 - Team collaboration (Supabase RLS for permissions)
 - Webhook notifications on publish
+- MCP via Supabase Realtime (no dedicated server)
 
 ### Deliverables
 - [ ] Supabase project setup + schema migration
 - [ ] SupabaseStore implementation (pluggable, replaces DockerStore)
 - [ ] Cloudflare R2 integration (compile + upload)
 - [ ] Supabase Auth (Google, Facebook social login)
-- [ ] Vercel deployment config
+- [ ] Vercel deployment config + API route for MCP proxy
+- [ ] Supabase Realtime transport for MCP (replace WebSocket)
 - [ ] Unity SDK: R2 fetch, hash verification, social auth
 - [ ] Storage toggle: enable "Cloud" option per project
-- [ ] CI/CD pipeline for dashboard + MCP server
+- [ ] CI/CD pipeline for dashboard
 
 ---
 
