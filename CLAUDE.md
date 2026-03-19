@@ -4,29 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Unity Flux is a game data sync platform for delivering over-the-air configuration updates to Unity games. It consists of four components:
+Unity Flux is a game data sync platform for delivering over-the-air configuration updates to Unity games.
 
-- **Management Dashboard**: React app on Vercel for defining data schemas, managing game entries, and publishing config versions
-- **Database & Auth**: Supabase (PostgreSQL) for data storage and authentication (Google/Facebook social logins for the Unity client)
-- **Content Delivery**: Cloudflare R2 for storing compiled, versioned config files (zero-egress CDN)
-- **Unity SDK**: C# package that handles auth, fetches configs from R2, and caches locally with version hash verification
+## Project Structure
 
-## Architecture
+```
+unity-flux/
+  dashboard/         # React dashboard (Vite 8, React 19, TanStack, shadcn/ui, Tailwind v4)
+  mcp-server/        # MCP server + REST API (Express, TypeScript, 25 MCP tools)
+  database/          # Docker PostgreSQL (docker-compose.yml + init SQL)
+  unity-sdk/         # Unity C# SDK package
+  documents/         # Architecture documentation (01-09)
+  ROADMAP.md         # Phase 1 (local) + Phase 2 (cloud) development plan
+```
 
-The data flow is: Dashboard (React) -> Supabase (PostgreSQL) -> compiled/published to Cloudflare R2 -> fetched by Unity SDK -> cached on device.
+## Current Phase: Phase 1 (Local-First)
 
-Key concepts:
-- **Versioned configs**: Data is compiled and versioned; clients check hashes before downloading
-- **Dynamic schemas**: Supports arbitrary game data structures (stats, equipment systems, etc.)
-- **Smart caching**: Unity client only downloads when version hash changes
+Focus: Dashboard UI + Unity SDK + Docker PostgreSQL + MCP. No cloud services required.
+
+- **Dashboard**: React app for managing game config tables, publishing versions, generating C# code
+- **MCP Server**: Express server at `/mcp` (MCP tools) + `/api` (REST for dashboard). Uses local JSON store (migrating to Docker PostgreSQL)
+- **Unity SDK**: C# package (planned) for fetching configs + local caching
+
+Phase 2 will add Supabase + Cloudflare R2 + Vercel deployment. Each project will toggle between local and cloud storage.
+
+## Architecture (Phase 1)
+
+```
+Dashboard (React) --> REST API /api --> Local Database
+AI Agents         --> MCP /mcp     --> Local Database
+Unity SDK         --> Config API   --> Local Database
+```
 
 ## Tech Stack
 
-- **Frontend**: React, deployed on Vercel
-- **Backend**: Supabase (PostgreSQL + Auth)
-- **Storage/CDN**: Cloudflare R2
+- **Frontend**: React 19, Vite 8, TanStack Router + Query, shadcn/ui, Tailwind v4, Zustand
+- **Backend**: Express, @modelcontextprotocol/sdk, TypeScript
+- **Database**: Docker PostgreSQL (Phase 1) / Supabase (Phase 2)
+- **CDN**: Local server (Phase 1) / Cloudflare R2 (Phase 2)
 - **Client**: Unity (C#)
 
-## Status
+## Key Commands
 
-This project is in the planning/documentation phase. No source code has been implemented yet.
+```bash
+# Dashboard
+cd dashboard && pnpm dev         # http://localhost:5173
+
+# MCP Server
+cd mcp-server && pnpm dev        # http://localhost:3001
+```
+
+## Conventions
+
+- Use pnpm as package manager
+- Frontend uses file-based routing (TanStack Router)
+- MCP tools use user-facing terminology: "tables" (not schemas), "rows" (not entries), "columns" (not fields)
+- C# codegen uses [SerializeField] private + public getter pattern
+- Storage layer is pluggable via DataStore interface (per project)
