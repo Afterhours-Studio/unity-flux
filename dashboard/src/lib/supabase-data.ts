@@ -59,7 +59,7 @@ function toProject(r: any): Project {
     createdAt: r.created_at, updatedAt: r.updated_at,
     apiKey: r.api_key, anonKey: r.anon_key,
     supabaseUrl: r.supabase_url, r2BucketUrl: r.r2_bucket_url,
-    environment: r.environment,
+    environment: r.environment, dataSource: r.data_source ?? 'cloud',
   }
 }
 
@@ -147,7 +147,7 @@ export async function createProject(name: string, description: string): Promise<
 
 export async function updateProject(
   id: string,
-  updates: Partial<Pick<Project, 'name' | 'description' | 'icon' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>>,
+  updates: Partial<Pick<Project, 'name' | 'description' | 'icon' | 'supabaseUrl' | 'r2BucketUrl' | 'environment' | 'dataSource'>>,
 ): Promise<Project> {
   const row: Record<string, unknown> = {}
   if (updates.name !== undefined) row.name = updates.name
@@ -156,6 +156,7 @@ export async function updateProject(
   if (updates.supabaseUrl !== undefined) row.supabase_url = updates.supabaseUrl
   if (updates.r2BucketUrl !== undefined) row.r2_bucket_url = updates.r2BucketUrl
   if (updates.environment !== undefined) row.environment = updates.environment
+  if (updates.dataSource !== undefined) row.data_source = updates.dataSource
   if (Object.keys(row).length === 0) {
     const p = await getProject(id)
     if (!p) throw new Error(`Project not found: ${id}`)

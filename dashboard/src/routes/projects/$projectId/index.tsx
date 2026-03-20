@@ -456,47 +456,67 @@ function ProjectOverview() {
               <CardTitle className="text-sm">Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Data Source Mode */}
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
-                  Local API Server
+                  Data Source
                 </Label>
-                <Input
-                  placeholder="http://localhost:3001"
-                  value={project.supabaseUrl}
-                  onChange={(e) =>
-                    updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
-                  }
-                  className="text-xs h-8 font-mono"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Connect Unity SDK to a local Docker database for development.
-                </p>
+                <div className="flex h-8 rounded-md border bg-muted/30 p-0.5 gap-0.5">
+                  {(['cloud', 'local', 'both'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => updateProjectMut.mutate({ id: project.id, updates: { dataSource: mode } })}
+                      className={cn(
+                        'flex-1 rounded text-xs font-medium transition-all',
+                        project.dataSource === mode
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {mode === 'cloud' ? 'Cloud' : mode === 'local' ? 'Local' : 'Both'}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <Separator />
+              {/* Local API Server — shown for local / both */}
+              {(project.dataSource === 'local' || project.dataSource === 'both') && (
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Local API Server
+                  </Label>
+                  <Input
+                    placeholder="http://localhost:3001"
+                    value={project.supabaseUrl}
+                    onChange={(e) =>
+                      updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
+                    }
+                    className="text-xs h-8 font-mono"
+                  />
+                </div>
+              )}
 
-              {/* CDN Endpoint */}
+              {/* CDN Endpoint — always shown */}
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Globe className="h-3 w-3" />
                   CDN Endpoint
                 </Label>
-                {project.r2BucketUrl ? (
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      value={`${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`}
-                      readOnly
-                      className="font-mono text-[10px] h-7 text-muted-foreground"
-                    />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={project.r2BucketUrl
+                      ? `${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`
+                      : 'Not published yet'
+                    }
+                    readOnly
+                    className={cn('font-mono text-[10px] h-7', project.r2BucketUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
+                  />
+                  {project.r2BucketUrl && (
                     <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(`${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`) }}>
                       <Copy className="h-3 w-3" />
                     </Button>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground italic">
-                    Publish a version to enable CDN delivery.
-                  </p>
-                )}
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

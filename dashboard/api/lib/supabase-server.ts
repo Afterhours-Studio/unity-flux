@@ -18,6 +18,7 @@ interface Project {
   id: string; name: string; slug: string; description: string
   createdAt: string; updatedAt: string; apiKey: string; anonKey: string
   supabaseUrl: string; r2BucketUrl: string; environment: Environment
+  dataSource: 'cloud' | 'local' | 'both'
 }
 
 interface SchemaField {
@@ -122,7 +123,7 @@ function nextVersionTag(versions: Version[], projectId: string, environment: Env
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toProject(r: any): Project {
-  return { id: r.id, name: r.name, slug: r.slug, description: r.description, createdAt: r.created_at, updatedAt: r.updated_at, apiKey: r.api_key, anonKey: r.anon_key, supabaseUrl: r.supabase_url, r2BucketUrl: r.r2_bucket_url, environment: r.environment }
+  return { id: r.id, name: r.name, slug: r.slug, description: r.description, createdAt: r.created_at, updatedAt: r.updated_at, apiKey: r.api_key, anonKey: r.anon_key, supabaseUrl: r.supabase_url, r2BucketUrl: r.r2_bucket_url, environment: r.environment, dataSource: r.data_source ?? 'cloud' }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toSchema(r: any): Schema {

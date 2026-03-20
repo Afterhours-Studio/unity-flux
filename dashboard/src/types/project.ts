@@ -12,6 +12,7 @@ export interface Project {
   supabaseUrl: string
   r2BucketUrl: string
   environment: 'development' | 'staging' | 'production'
+  dataSource: 'cloud' | 'local' | 'both'
 }
 
 export interface SchemaField {
