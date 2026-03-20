@@ -55,6 +55,7 @@ function nextVersionTag(versions: Version[], projectId: string, environment: Env
 function toProject(r: any): Project {
   return {
     id: r.id, name: r.name, slug: r.slug, description: r.description,
+    icon: r.icon ?? '',
     createdAt: r.created_at, updatedAt: r.updated_at,
     apiKey: r.api_key, anonKey: r.anon_key,
     supabaseUrl: r.supabase_url, r2BucketUrl: r.r2_bucket_url,
@@ -88,6 +89,7 @@ function toVersion(r: any): Version {
     environment: r.environment, status: r.status,
     data: r.data as Record<string, Record<string, unknown>[]>,
     tableCount: r.table_count, rowCount: r.row_count,
+    r2Url: r.r2_url ?? null,
     publishedAt: r.published_at,
   }
 }
@@ -145,11 +147,12 @@ export async function createProject(name: string, description: string): Promise<
 
 export async function updateProject(
   id: string,
-  updates: Partial<Pick<Project, 'name' | 'description' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>>,
+  updates: Partial<Pick<Project, 'name' | 'description' | 'icon' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>>,
 ): Promise<Project> {
   const row: Record<string, unknown> = {}
   if (updates.name !== undefined) row.name = updates.name
   if (updates.description !== undefined) row.description = updates.description
+  if (updates.icon !== undefined) row.icon = updates.icon
   if (updates.supabaseUrl !== undefined) row.supabase_url = updates.supabaseUrl
   if (updates.r2BucketUrl !== undefined) row.r2_bucket_url = updates.r2BucketUrl
   if (updates.environment !== undefined) row.environment = updates.environment
@@ -393,7 +396,27 @@ export async function publishVersion(projectId: string, environment: Environment
   if (error) throw error
 
   await insertActivity(projectId, 'publish', `Published ${versionTag} to ${environment}`)
-  return toVersion(data)
+
+  const version = toVersion(data)
+
+  // R2 CDN upload (non-fatal, fire-and-forget from client)
+  try {
+    const project = await getProject(projectId)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (project && session?.access_token) {
+      fetch('/api/r2/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          projectId, versionId: version.id, projectSlug: project.slug,
+          environment, versionTag, data: snapshot,
+          tableCount: schemas.length, rowCount,
+        }),
+      }).catch(() => { /* R2 upload is non-fatal */ })
+    }
+  } catch { /* R2 upload is non-fatal */ }
+
+  return version
 }
 
 export async function promoteVersion(versionId: string, targetEnv: Environment): Promise<Version> {
@@ -424,7 +447,27 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
   if (error) throw error
 
   await insertActivity(sourceVersion.projectId, 'promote', `Promoted ${sourceVersion.versionTag} → ${targetEnv} as ${versionTag}`)
-  return toVersion(data)
+
+  const version = toVersion(data)
+
+  // R2 CDN upload (non-fatal)
+  try {
+    const project = await getProject(sourceVersion.projectId)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (project && session?.access_token) {
+      fetch('/api/r2/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          projectId: sourceVersion.projectId, versionId: version.id, projectSlug: project.slug,
+          environment: targetEnv, versionTag,
+          data: sourceVersion.data, tableCount: sourceVersion.tableCount, rowCount: sourceVersion.rowCount,
+        }),
+      }).catch(() => {})
+    }
+  } catch {}
+
+  return version
 }
 
 export async function rollbackVersion(versionId: string): Promise<void> {
@@ -444,6 +487,22 @@ export async function rollbackVersion(versionId: string): Promise<void> {
   // Reactivate target
   await supabase.from('versions').update({ status: 'active' }).eq('id', versionId)
   await insertActivity(v.projectId, 'rollback', `Rolled back to ${v.versionTag} in ${v.environment}`)
+
+  // R2 CDN pointer update (non-fatal)
+  try {
+    const project = await getProject(v.projectId)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (project && session?.access_token) {
+      fetch('/api/r2/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          projectSlug: project.slug, environment: v.environment,
+          versionTag: v.versionTag, tableCount: v.tableCount, rowCount: v.rowCount,
+        }),
+      }).catch(() => {})
+    }
+  } catch {}
 }
 
 export async function deleteVersion(versionId: string): Promise<void> {

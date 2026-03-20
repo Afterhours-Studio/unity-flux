@@ -3,6 +3,7 @@
  * Uses service role key (bypass RLS) — for MCP admin tools only.
  */
 import { createClient } from '@supabase/supabase-js'
+import { isR2Configured, uploadConfigVersion, updateMasterVersion } from './r2.js'
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -41,7 +42,7 @@ interface Version {
   id: string; projectId: string; versionTag: string
   environment: Environment; status: 'active' | 'superseded' | 'rolled_back'
   data: Record<string, Record<string, unknown>[]>
-  tableCount: number; rowCount: number; publishedAt: string
+  tableCount: number; rowCount: number; r2Url: string | null; publishedAt: string
 }
 
 interface VersionTableDiff {
@@ -133,7 +134,7 @@ function toEntry(r: any): DataEntry {
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toVersion(r: any): Version {
-  return { id: r.id, projectId: r.project_id, versionTag: r.version_tag, environment: r.environment, status: r.status, data: r.data, tableCount: r.table_count, rowCount: r.row_count, publishedAt: r.published_at }
+  return { id: r.id, projectId: r.project_id, versionTag: r.version_tag, environment: r.environment, status: r.status, data: r.data, tableCount: r.table_count, rowCount: r.row_count, r2Url: r.r2_url ?? null, publishedAt: r.published_at }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toActivity(r: any): ActivityLog {
@@ -344,6 +345,27 @@ export async function publishVersion(projectId: string, environment: Environment
   }).select().single()
   if (error) throw error
   await insertActivity(projectId, 'publish', `Published ${versionTag} to ${environment}`)
+
+  // R2 CDN upload (non-fatal)
+  if (isR2Configured()) {
+    try {
+      const project = await getProject(projectId)
+      if (project) {
+        const { r2Url } = await uploadConfigVersion({
+          slug: project.slug, environment, versionTag,
+          snapshot, tableCount: schemas.length, rowCount,
+        })
+        await supabase.from('versions').update({ r2_url: r2Url }).eq('id', id)
+        if (!project.r2BucketUrl) {
+          await supabase.from('projects').update({ r2_bucket_url: process.env.R2_PUBLIC_URL || 'https://cdn.h1dr0n.org' }).eq('id', projectId)
+        }
+        data.r2_url = r2Url
+      }
+    } catch (r2Err) {
+      console.error('R2 upload failed (non-fatal):', r2Err)
+    }
+  }
+
   return toVersion(data)
 }
 
@@ -361,6 +383,24 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
   }).select().single()
   if (error) throw error
   await insertActivity(sv.projectId, 'promote', `Promoted ${sv.versionTag} → ${targetEnv} as ${versionTag}`)
+
+  // R2 CDN upload (non-fatal)
+  if (isR2Configured()) {
+    try {
+      const project = await getProject(sv.projectId)
+      if (project) {
+        const { r2Url } = await uploadConfigVersion({
+          slug: project.slug, environment: targetEnv, versionTag,
+          snapshot: sv.data, tableCount: sv.tableCount, rowCount: sv.rowCount,
+        })
+        await supabase.from('versions').update({ r2_url: r2Url }).eq('id', id)
+        data.r2_url = r2Url
+      }
+    } catch (r2Err) {
+      console.error('R2 promote upload failed (non-fatal):', r2Err)
+    }
+  }
+
   return toVersion(data)
 }
 
@@ -370,6 +410,21 @@ export async function rollbackVersion(versionId: string): Promise<void> {
   await supabase.from('versions').update({ status: 'rolled_back' }).eq('project_id', v.projectId).eq('environment', v.environment).eq('status', 'active')
   await supabase.from('versions').update({ status: 'active' }).eq('id', versionId)
   await insertActivity(v.projectId, 'rollback', `Rolled back to ${v.versionTag} in ${v.environment}`)
+
+  // R2 CDN pointer update (non-fatal)
+  if (isR2Configured()) {
+    try {
+      const project = await getProject(v.projectId)
+      if (project) {
+        await updateMasterVersion({
+          slug: project.slug, environment: v.environment,
+          versionTag: v.versionTag, tableCount: v.tableCount, rowCount: v.rowCount,
+        })
+      }
+    } catch (r2Err) {
+      console.error('R2 rollback pointer update failed (non-fatal):', r2Err)
+    }
+  }
 }
 
 export async function deleteVersion(versionId: string): Promise<void> {

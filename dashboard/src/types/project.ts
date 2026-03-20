@@ -3,6 +3,7 @@ export interface Project {
   name: string
   slug: string
   description: string
+  icon: string // emoji or image URL
   createdAt: string
   updatedAt: string
   // Keys & tokens for Unity SDK integration
@@ -73,6 +74,7 @@ export interface Version {
   data: Record<string, Record<string, unknown>[]>
   tableCount: number
   rowCount: number
+  r2Url: string | null
   publishedAt: string
 }
 

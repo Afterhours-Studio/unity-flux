@@ -55,8 +55,10 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Version } from '@/types/project'
+import { Label } from '@/components/ui/label'
 import {
   useVersions,
+  usePublishVersion,
   usePromoteVersion,
   useRollbackVersion,
   useDeleteVersion,
@@ -855,11 +857,22 @@ function VersionsPage() {
   )
 
   // Dialog state
+  const [publishOpen, setPublishOpen] = useState(false)
   const [viewVersion, setViewVersion] = useState<Version | null>(null)
   const [promoteVersion, setPromoteVersion] = useState<Version | null>(null)
   const [rollbackVersion, setRollbackVersion] = useState<Version | null>(null)
   const [deleteVersion, setDeleteVersion] = useState<Version | null>(null)
   const [compareOpen, setCompareOpen] = useState(false)
+
+  const publishVersionMut = usePublishVersion()
+  const handlePublish = async (env: 'development' | 'staging' | 'production') => {
+    try {
+      const version = await publishVersionMut.mutateAsync({ projectId, environment: env })
+      toast.success(`Published ${version.versionTag} to ${env}`)
+    } catch (err) {
+      toast.error(`Failed to publish: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
 
   // Active version per env
   const activePerEnv = useMemo(() => {
@@ -923,11 +936,17 @@ function VersionsPage() {
   return (
     <PageTransition className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Version Manager</h1>
-        <p className="text-muted-foreground mt-1">
-          Publish, compare, and manage configuration versions.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Version Manager</h1>
+          <p className="text-muted-foreground mt-1">
+            Publish, compare, and manage configuration versions.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setPublishOpen(true)}>
+          <Rocket className="h-3.5 w-3.5 mr-1.5" />
+          Publish
+        </Button>
       </div>
 
       {/* Environment overview cards */}
@@ -1127,6 +1146,24 @@ function VersionsPage() {
                           <TooltipContent>Copy as JSON</TooltipContent>
                         </Tooltip>
 
+                        {version.r2Url && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                                asChild
+                              >
+                                <a href={version.r2Url} target="_blank" rel="noopener noreferrer">
+                                  <Globe className="h-[18px] w-[18px]" />
+                                </a>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View on CDN</TooltipContent>
+                          </Tooltip>
+                        )}
+
                         {version.status === 'active' && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1230,6 +1267,91 @@ function VersionsPage() {
         open={compareOpen}
         onOpenChange={setCompareOpen}
       />
+      <PublishDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        onPublish={handlePublish}
+      />
     </PageTransition>
+  )
+}
+
+/* ═══════════════════════════════════════════════
+   Publish Dialog
+   ═══════════════════════════════════════════════ */
+
+const ENV_OPTIONS = [
+  { value: 'development' as const, label: 'Development', desc: 'For testing and development builds' },
+  { value: 'staging' as const, label: 'Staging', desc: 'Pre-production environment for QA' },
+  { value: 'production' as const, label: 'Production', desc: 'Live environment for all players' },
+]
+
+function PublishDialog({
+  open,
+  onOpenChange,
+  onPublish,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onPublish: (env: 'development' | 'staging' | 'production') => void
+}) {
+  const [env, setEnv] = useState<'development' | 'staging' | 'production'>('staging')
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle>Publish Version</DialogTitle>
+          <DialogDescription>
+            Snapshot all blueprints and formulas, then deploy to an environment.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 px-6 py-4">
+          <Label>Target Environment</Label>
+          <div className="space-y-2">
+            {ENV_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setEnv(opt.value)}
+                className={cn(
+                  'flex items-center gap-3 p-3 border rounded-lg text-left w-full transition-colors',
+                  env === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'hover:bg-muted/50',
+                  opt.value === 'production' && env === opt.value && 'border-destructive bg-destructive/5',
+                )}
+              >
+                <div className={cn(
+                  'h-4 w-4 rounded-full border-2 shrink-0 transition-colors',
+                  env === opt.value
+                    ? opt.value === 'production' ? 'border-destructive bg-destructive' : 'border-primary bg-primary'
+                    : 'border-muted-foreground/30',
+                )} />
+                <div>
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+          {env === 'production' && (
+            <div className="flex gap-2 items-start bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p>Publishing to production will immediately update the live configuration for all players.</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="px-6 pb-6 pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            variant={env === 'production' ? 'destructive' : 'default'}
+            onClick={() => { onPublish(env); onOpenChange(false) }}
+          >
+            <Rocket className="h-4 w-4 mr-2" />
+            Publish to {env}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
