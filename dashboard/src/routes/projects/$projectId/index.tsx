@@ -330,7 +330,7 @@ function ProjectOverview() {
       <div className="grid gap-5 lg:grid-cols-5">
         {/* Activity — right 2/5, stretches to match left */}
         <div className="lg:col-span-2 lg:order-2 flex">
-          <Card className="flex flex-col flex-1 min-h-0 max-h-[710px]">
+          <Card className="flex flex-col flex-1 min-h-0 max-h-[700px]">
             <CardHeader className="pb-2 shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">Recent Activity</CardTitle>
@@ -506,21 +506,29 @@ function ProjectOverview() {
                   <Globe className="h-3 w-3" />
                   CDN Endpoint
                 </Label>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    value={project.r2BucketUrl
-                      ? `${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`
-                      : 'Not published yet'
-                    }
-                    readOnly
-                    className={cn('font-mono text-[10px] h-7', project.r2BucketUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
-                  />
-                  {project.r2BucketUrl && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(`${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`) }}>
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
+                {(() => {
+                  const cdnSlug = project.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                  const cdnUrl = project.r2BucketUrl
+                    ? `${project.r2BucketUrl}/${cdnSlug}/{env}/master_version.json`
+                    : 'Not published yet'
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={cdnUrl}
+                        readOnly
+                        className={cn('font-mono text-[10px] h-7', project.r2BucketUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
+                      />
+                      {project.r2BucketUrl && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => {
+                          navigator.clipboard.writeText(cdnUrl)
+                          toast.success('CDN URL copied')
+                        }}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </CardContent>
           </Card>

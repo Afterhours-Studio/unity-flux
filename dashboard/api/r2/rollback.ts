@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: 'R2 not configured' })
   }
 
-  const { projectSlug, environment, versionTag, tableCount, rowCount } = req.body
+  const { projectSlug, projectName, environment, versionTag, tableCount, rowCount } = req.body
 
   if (!projectSlug || !environment || !versionTag) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -42,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await updateMasterVersion({
       slug: projectSlug,
+      name: projectName,
       environment,
       versionTag,
       tableCount: tableCount ?? 0,

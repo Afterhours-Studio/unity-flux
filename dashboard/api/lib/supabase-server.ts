@@ -353,7 +353,7 @@ export async function publishVersion(projectId: string, environment: Environment
       const project = await getProject(projectId)
       if (project) {
         const { r2Url } = await uploadConfigVersion({
-          slug: project.slug, environment, versionTag,
+          slug: project.slug, name: project.name, environment, versionTag,
           snapshot, tableCount: schemas.length, rowCount,
         })
         await supabase.from('versions').update({ r2_url: r2Url }).eq('id', id)
@@ -391,7 +391,7 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
       const project = await getProject(sv.projectId)
       if (project) {
         const { r2Url } = await uploadConfigVersion({
-          slug: project.slug, environment: targetEnv, versionTag,
+          slug: project.slug, name: project.name, environment: targetEnv, versionTag,
           snapshot: sv.data, tableCount: sv.tableCount, rowCount: sv.rowCount,
         })
         await supabase.from('versions').update({ r2_url: r2Url }).eq('id', id)
@@ -418,7 +418,7 @@ export async function rollbackVersion(versionId: string): Promise<void> {
       const project = await getProject(v.projectId)
       if (project) {
         await updateMasterVersion({
-          slug: project.slug, environment: v.environment,
+          slug: project.slug, name: project.name, environment: v.environment,
           versionTag: v.versionTag, tableCount: v.tableCount, rowCount: v.rowCount,
         })
       }

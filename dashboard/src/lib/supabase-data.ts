@@ -410,7 +410,7 @@ export async function publishVersion(projectId: string, environment: Environment
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           projectId, versionId: version.id, projectSlug: project.slug,
-          environment, versionTag, data: snapshot,
+          projectName: project.name, environment, versionTag, data: snapshot,
           tableCount: schemas.length, rowCount,
         }),
       }).catch(() => { /* R2 upload is non-fatal */ })
@@ -461,7 +461,7 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           projectId: sourceVersion.projectId, versionId: version.id, projectSlug: project.slug,
-          environment: targetEnv, versionTag,
+          projectName: project.name, environment: targetEnv, versionTag,
           data: sourceVersion.data, tableCount: sourceVersion.tableCount, rowCount: sourceVersion.rowCount,
         }),
       }).catch(() => {})
@@ -498,7 +498,7 @@ export async function rollbackVersion(versionId: string): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          projectSlug: project.slug, environment: v.environment,
+          projectSlug: project.slug, projectName: project.name, environment: v.environment,
           versionTag: v.versionTag, tableCount: v.tableCount, rowCount: v.rowCount,
         }),
       }).catch(() => {})

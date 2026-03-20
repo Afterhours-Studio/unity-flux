@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: 'R2 not configured' })
   }
 
-  const { projectId, versionId, projectSlug, environment, versionTag, data, tableCount, rowCount } = req.body
+  const { projectId, versionId, projectSlug, projectName, environment, versionTag, data, tableCount, rowCount } = req.body
 
   if (!projectId || !versionId || !projectSlug || !environment || !versionTag || !data) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -43,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { r2Url, hash } = await uploadConfigVersion({
       slug: projectSlug,
+      name: projectName,
       environment,
       versionTag,
       snapshot: data,

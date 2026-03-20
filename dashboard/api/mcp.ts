@@ -235,7 +235,7 @@ function registerTools(server: McpServer) {
     const environments = ['development', 'staging', 'production']
     const urls: Record<string, string> = {}
     for (const env of environments) {
-      urls[env] = getCdnUrl(project.slug, env)
+      urls[env] = getCdnUrl(project.slug, env, project.name)
     }
     return {
       configured: true,

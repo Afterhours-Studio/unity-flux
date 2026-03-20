@@ -43,13 +43,17 @@ function sha256(data: string): string {
  */
 export async function uploadConfigVersion(params: {
   slug: string
+  name?: string
   environment: string
   versionTag: string
   snapshot: Record<string, Record<string, unknown>[]>
   tableCount: number
   rowCount: number
 }): Promise<{ r2Url: string; hash: string }> {
-  const { slug, environment, versionTag, snapshot, tableCount, rowCount } = params
+  const { name, environment, versionTag, snapshot, tableCount, rowCount } = params
+  const slug = name
+    ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    : params.slug
   const s3 = getS3Client()
 
   // Build the config payload
@@ -102,12 +106,16 @@ export async function uploadConfigVersion(params: {
  */
 export async function updateMasterVersion(params: {
   slug: string
+  name?: string
   environment: string
   versionTag: string
   tableCount: number
   rowCount: number
 }): Promise<void> {
-  const { slug, environment, versionTag, tableCount, rowCount } = params
+  const { name, environment, versionTag, tableCount, rowCount } = params
+  const slug = name
+    ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    : params.slug
   const s3 = getS3Client()
 
   const configKey = `${slug}/${environment}/config_${versionTag}.json`
@@ -134,8 +142,11 @@ export async function updateMasterVersion(params: {
 /**
  * Get the public CDN URL for a project's environment.
  */
-export function getCdnUrl(slug: string, environment: string): string {
-  return `${R2_PUBLIC_URL}/${slug}/${environment}/master_version.json`
+export function getCdnUrl(slug: string, environment: string, name?: string): string {
+  const cdnSlug = name
+    ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    : slug
+  return `${R2_PUBLIC_URL}/${cdnSlug}/${environment}/master_version.json`
 }
 
 /**
