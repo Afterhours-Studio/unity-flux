@@ -319,7 +319,7 @@ function CdnEndpointField({ project }: { project: Project }) {
       </Label>
       <div className="flex items-center gap-1.5">
         <Select value={env} onValueChange={(v) => setEnv(v as typeof CDN_ENVS[number])}>
-          <SelectTrigger className="h-7 w-auto shrink-0 text-xs gap-1 px-2">
+          <SelectTrigger size="sm" className="!h-7 w-auto shrink-0 text-[10px] gap-1 px-2 py-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
