@@ -42,7 +42,7 @@ export interface Version {
 
 export interface ActivityLog {
   id: string; projectId: string
-  type: 'publish' | 'promote' | 'rollback' | 'table_create' | 'table_delete' | 'table_update' | 'row_add' | 'row_delete'
+  type: 'publish' | 'promote' | 'rollback' | 'table_create' | 'table_delete' | 'table_update' | 'row_add' | 'row_delete' | 'event_create' | 'event_update' | 'event_delete'
   message: string
   meta?: Record<string, unknown>
   createdAt: string
