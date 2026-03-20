@@ -479,22 +479,26 @@ function ProjectOverview() {
                 </div>
               </div>
 
-              {/* Local API Server — shown for local / both */}
-              {(project.dataSource === 'local' || project.dataSource === 'both') && (
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Local API Server
-                  </Label>
-                  <Input
-                    placeholder="http://localhost:3001"
-                    value={project.supabaseUrl}
-                    onChange={(e) =>
-                      updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
-                    }
-                    className="text-xs h-8 font-mono"
-                  />
-                </div>
-              )}
+              {/* Local API Server — visible for local / both */}
+              <div className={cn(
+                'grid gap-1 transition-opacity',
+                project.dataSource === 'local' || project.dataSource === 'both'
+                  ? 'opacity-100'
+                  : 'opacity-30 pointer-events-none'
+              )}>
+                <Label className="text-xs text-muted-foreground">
+                  Local API Server
+                </Label>
+                <Input
+                  placeholder="http://localhost:3001"
+                  value={project.supabaseUrl}
+                  onChange={(e) =>
+                    updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
+                  }
+                  className="text-xs h-8 font-mono"
+                  tabIndex={project.dataSource === 'local' || project.dataSource === 'both' ? 0 : -1}
+                />
+              </div>
 
               {/* CDN Endpoint — always shown */}
               <div className="grid gap-1">
