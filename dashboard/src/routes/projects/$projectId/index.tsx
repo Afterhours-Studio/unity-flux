@@ -313,8 +313,7 @@ function CdnEndpointField({ project }: { project: Project }) {
 
   return (
     <div className="grid gap-1">
-      <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-        <Globe className="h-3 w-3" />
+      <Label className="text-xs text-muted-foreground">
         CDN Endpoint
       </Label>
       <div className="flex items-center gap-1.5">
