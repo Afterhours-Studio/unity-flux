@@ -302,6 +302,61 @@ await FluxManager.Instance.SyncAsync();`}
   )
 }
 
+const CDN_ENVS = ['development', 'staging', 'production'] as const
+
+function CdnEndpointField({ project }: { project: Project }) {
+  const [env, setEnv] = useState<typeof CDN_ENVS[number]>('development')
+  const cdnUrl = project.r2BucketUrl
+    ? `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
+    : null
+
+  return (
+    <div className="grid gap-1">
+      <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+        <Globe className="h-3 w-3" />
+        CDN Endpoint
+      </Label>
+      <div className="flex items-center gap-1.5">
+        <div className="flex h-7 rounded-md border bg-muted/30 p-0.5 gap-0.5 shrink-0">
+          {CDN_ENVS.map((e) => (
+            <button
+              key={e}
+              onClick={() => setEnv(e)}
+              className={cn(
+                'px-1.5 rounded text-[10px] font-medium transition-all',
+                env === e
+                  ? 'bg-background shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {e === 'development' ? 'Dev' : e === 'staging' ? 'Stg' : 'Prod'}
+            </button>
+          ))}
+        </div>
+        <Input
+          value={cdnUrl ?? 'Not published yet'}
+          readOnly
+          className={cn('font-mono text-[10px] h-7', cdnUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          disabled={!cdnUrl}
+          onClick={() => {
+            if (cdnUrl) {
+              navigator.clipboard.writeText(cdnUrl)
+              toast.success('Copied to clipboard')
+            }
+          }}
+        >
+          <Copy className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function ProjectOverview() {
   const { projectId } = useParams({ from: '/projects/$projectId/' })
   const { data: project, isLoading } = useProject(projectId)
@@ -501,35 +556,7 @@ function ProjectOverview() {
               </div>
 
               {/* CDN Endpoint — always shown */}
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Globe className="h-3 w-3" />
-                  CDN Endpoint
-                </Label>
-                {(() => {
-                  const cdnSlug = project.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-                  const cdnUrl = project.r2BucketUrl
-                    ? `${project.r2BucketUrl}/${cdnSlug}/{env}/master_version.json`
-                    : 'Not published yet'
-                  return (
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        value={cdnUrl}
-                        readOnly
-                        className={cn('font-mono text-[10px] h-7', project.r2BucketUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
-                      />
-                      {project.r2BucketUrl && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => {
-                          navigator.clipboard.writeText(cdnUrl)
-                          toast.success('CDN URL copied')
-                        }}>
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  )
-                })()}
-              </div>
+              <CdnEndpointField project={project} />
             </CardContent>
           </Card>
 
