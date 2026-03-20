@@ -83,13 +83,12 @@ function AdminPage() {
       return
     }
 
-    // Enrich with auth data if available
     const rows: UserRow[] = (data || []).map((p: Record<string, unknown>) => ({
       id: p.id as string,
-      email: (p as Record<string, unknown>).email as string || '',
-      display_name: p.display_name as string || '',
-      role: p.role as string || 'user',
-      avatar_url: null,
+      email: (p.email as string) || '',
+      display_name: (p.display_name as string) || '',
+      role: (p.role as string) || 'editor',
+      avatar_url: (p.avatar_url as string) || null,
       created_at: p.created_at as string,
       last_sign_in_at: null,
     }))

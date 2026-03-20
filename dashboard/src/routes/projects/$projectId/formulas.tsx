@@ -689,6 +689,12 @@ function FormulasPage() {
   const deleteMut = useDeleteFormula()
   const [createOpen, setCreateOpen] = useState(false)
   const [editFormula, setEditFormula] = useState<Formula | null>(null)
+  const [filterMode, setFilterMode] = useState('all')
+
+  const filtered = useMemo(() =>
+    formulas.filter((f) => filterMode === 'all' || f.outputMode === filterMode),
+    [formulas, filterMode],
+  )
 
   if (isLoading) {
     return (
@@ -700,34 +706,49 @@ function FormulasPage() {
 
   return (
     <PageTransition className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Formulas</h1>
-          <p className="text-sm text-muted-foreground">
-            Define reusable math and logic expressions for your game.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Formulas</h1>
+        <p className="text-sm text-muted-foreground">
+          Define reusable math and logic expressions for your game.
+        </p>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-3">
+        <Select value={filterMode} onValueChange={setFilterMode}>
+          <SelectTrigger className="w-[160px] h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All modes</SelectItem>
+            <SelectItem value="method">C# Method</SelectItem>
+            <SelectItem value="lookup">Lookup Table</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="flex-1" />
+
+        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
           New Formula
         </Button>
       </div>
 
-      {formulas.length === 0 ? (
+      {filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center py-12">
             <FunctionSquare className="h-10 w-10 text-muted-foreground/20 mb-3" />
             <p className="text-sm font-medium mb-1">No formulas yet</p>
             <p className="text-xs text-muted-foreground mb-4">Create your first formula to define game calculations</p>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
               New Formula
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {formulas.map((formula) => (
+          {filtered.map((formula) => (
             <Card key={formula.id} className="group p-3 sm:p-4 overflow-hidden transition-all duration-200 hover:border-primary/20 hover:shadow-[0_2px_10px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_2px_10px_rgba(255,255,255,0.04)]">
               <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 p-0">
                 <div className="flex items-center gap-3.5 min-w-0 flex-1">

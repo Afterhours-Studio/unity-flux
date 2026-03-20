@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Plus, Gamepad2, Calendar, ArrowRight, Loader2 } from 'lucide-react'
+import { Plus, Calendar, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CreateProjectDialog } from '@/features/projects/create-project-dialog'
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { PageTransition, motion, staggerContainer, staggerItem } from '@/components/motion'
+import { ProjectIcon } from '@/components/project-icon'
 import { useProjects } from '@/hooks/use-projects'
 
 export const Route = createFileRoute('/')({
@@ -80,9 +81,7 @@ function ProjectListPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                          <Gamepad2 className="h-5 w-5 text-primary" />
-                        </div>
+                        <ProjectIcon icon={project.icon} name={project.name} size="md" />
                         <div>
                           <CardTitle className="text-base">{project.name}</CardTitle>
                           <CardDescription className="text-xs mt-0.5">

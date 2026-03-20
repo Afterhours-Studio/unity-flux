@@ -217,6 +217,14 @@ function EventsTab({ projectId, events, onEdit }: {
   const [createOpen, setCreateOpen] = useState(false)
   const updateMut = useUpdateLiveOpsEvent()
   const deleteMut = useDeleteLiveOpsEvent()
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterType, setFilterType] = useState('all')
+
+  const filtered = events.filter((e) => {
+    if (filterStatus !== 'all' && e.status !== filterStatus) return false
+    if (filterType !== 'all' && e.type !== filterType) return false
+    return true
+  })
 
   const handleSetStatus = async (event: LiveOpsEvent, status: LiveOpsStatus) => {
     try {
@@ -229,31 +237,56 @@ function EventsTab({ projectId, events, onEdit }: {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">
-          {events.length} event{events.length !== 1 ? 's' : ''}
-        </p>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
+      <div className="flex items-center gap-3 mb-4">
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[150px] h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="scheduled">Scheduled</SelectItem>
+            <SelectItem value="live">Live</SelectItem>
+            <SelectItem value="ended">Ended</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-[160px] h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            {Object.entries(EVENT_TYPE_LABELS).map(([val, label]) => (
+              <SelectItem key={val} value={val}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex-1" />
+
+        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
           New Event
         </Button>
       </div>
 
-      {events.length === 0 ? (
+      {filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center py-12">
             <CalendarDays className="h-10 w-10 text-muted-foreground/20 mb-3" />
             <p className="text-sm font-medium mb-1">No events yet</p>
             <p className="text-xs text-muted-foreground mb-4">Create your first live ops event</p>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
               New Event
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {events.map((event) => {
+          {filtered.map((event) => {
             const Icon = ICON_MAP[LIVE_OPS_TEMPLATES.find((t) => t.type === event.type)?.icon ?? ''] ?? CalendarDays
             return (
               <Card key={event.id} className="group p-3 sm:p-4 overflow-hidden transition-all duration-200 hover:border-primary/20 hover:shadow-[0_2px_10px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_2px_10px_rgba(255,255,255,0.04)]">

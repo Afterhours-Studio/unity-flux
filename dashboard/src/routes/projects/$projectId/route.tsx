@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Link, useParams } from '@tanstack/react-router'
 import { Database, History, KeyRound, ArrowLeft, Settings, Code, CalendarDays, FunctionSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ProjectIcon } from '@/components/project-icon'
 import { useProject } from '@/hooks/use-projects'
 import { Loader2 } from 'lucide-react'
 import { motion } from '@/components/motion'
@@ -111,9 +112,7 @@ function ProjectLayout() {
             All Projects
           </Link>
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary text-xs font-bold shrink-0">
-              {project.name[0]?.toUpperCase()}
-            </div>
+            <ProjectIcon icon={project.icon} name={project.name} size="sm" />
             <div className="min-w-0">
               <h2 className="font-semibold text-sm text-sidebar-foreground truncate leading-tight">
                 {project.name}

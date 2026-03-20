@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { LogOut, Sun, Moon, Bell, User, Shield, Camera, Check, X, Eye, EyeOff, Pencil } from 'lucide-react'
+import { LogOut, Sun, Moon, Bell, User, Shield, Camera, Smile, Check, X, Eye, EyeOff, Pencil } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -289,25 +289,53 @@ function ProfileContent() {
     <>
       {/* Avatar + Name */}
       <div className="flex items-center gap-4">
-        {/* Avatar with hover overlay */}
-        <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-          <Avatar className="h-16 w-16">
-            {avatarUrl && <AvatarImage src={`${avatarUrl}?t=${user?.updated_at || ''}`} />}
-            <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-              {uploadingAvatar ? '...' : initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <Camera className="h-4 w-4 text-white" />
-          </div>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </div>
+        {/* Avatar with dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="relative group cursor-pointer">
+              <Avatar className="h-16 w-16">
+                {avatarUrl && <AvatarImage src={`${avatarUrl}?t=${user?.updated_at || ''}`} />}
+                <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
+                  {uploadingAvatar ? '...' : initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="h-4 w-4 text-white" />
+              </div>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            <DropdownMenuItem onClick={() => avatarInputRef.current?.click()}>
+              <Camera className="h-4 w-4 mr-2" />
+              Set Profile Photo
+            </DropdownMenuItem>
+            {avatarUrl && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={async () => {
+                  try {
+                    const { supabase } = await import('@/lib/supabase')
+                    await supabase.auth.updateUser({ data: { avatar_url: '' } })
+                    toast.success('Avatar removed')
+                    window.location.reload()
+                  } catch {
+                    toast.error('Failed to remove avatar')
+                  }
+                }}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Remove
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarChange}
+        />
 
         {/* Name (inline edit) */}
         <div className="flex-1 min-w-0">

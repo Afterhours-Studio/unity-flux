@@ -44,21 +44,27 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
     // Fetch profile if logged in
     if (session?.user) {
-      get().fetchProfile()
+      await get().fetchProfile()
     }
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const prev = get().user
       set({
-        session,
-        user: session?.user ?? null,
+        session: newSession,
+        user: newSession?.user ?? null,
         loading: false,
       })
-      if (session?.user) {
+      if (newSession?.user && newSession.user.id !== prev?.id) {
+        // Only fetch profile on actual user change, not every event
         get().fetchProfile()
-      } else {
+      } else if (!newSession?.user) {
         set({ profile: null, isAdmin: false })
       }
     })
+
+    // Store subscription for cleanup if needed
+    ;(globalThis as Record<string, unknown>).__authSub?.()
+    ;(globalThis as Record<string, unknown>).__authSub = () => subscription.unsubscribe()
   },
 
   login: async (email, password) => {
@@ -92,8 +98,15 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         role: role as 'admin' | 'editor' | 'viewer',
         created_at: (data.created_at as string) || '',
       }
-      console.log('[Auth] Profile loaded:', profile)
       set({ profile, isAdmin: role === 'admin' })
+
+      // Sync avatar_url and email from auth metadata to profile row
+      const avatarUrl = user.user_metadata?.avatar_url as string | undefined
+      const email = user.email
+      supabase.from('user_profiles').update({
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        ...(email ? { email } : {}),
+      }).eq('id', user.id).then(() => {})
     } else {
       // Row doesn't exist or RLS blocked - use auth metadata as fallback
       console.log('[Auth] No profile row, using fallback. Error:', error?.message)

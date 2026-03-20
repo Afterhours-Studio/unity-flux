@@ -14,6 +14,8 @@ import {
   Plus,
   Pencil,
   RotateCcw,
+  ExternalLink,
+  Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -487,6 +489,32 @@ function ProjectOverview() {
                   className="text-xs h-8"
                 />
               </div>
+              {/* CDN Endpoints (read-only, shown when r2BucketUrl is set) */}
+              {project.r2BucketUrl && (
+                <div className="space-y-2 pt-1">
+                  <Separator />
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Globe className="h-3 w-3" />
+                    CDN Endpoints
+                  </Label>
+                  {(['production', 'staging', 'development'] as const).map((env) => {
+                    const url = `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
+                    return (
+                      <div key={env} className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-medium text-muted-foreground w-12 shrink-0">{env.slice(0, 4)}</span>
+                        <Input value={url} readOnly className="font-mono text-[10px] h-7 text-muted-foreground" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(url); }}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
+                          <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
                   Environment
