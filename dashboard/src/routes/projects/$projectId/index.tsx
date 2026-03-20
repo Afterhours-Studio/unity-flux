@@ -484,33 +484,51 @@ function ProjectOverview() {
                 </Select>
               </div>
 
-              {/* CDN Endpoints (read-only, auto-shown after first publish) */}
-              {project.r2BucketUrl && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Globe className="h-3 w-3" />
-                      CDN Endpoints
-                    </Label>
-                    {(['production', 'staging', 'development'] as const).map((env) => {
-                      const url = `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
-                      return (
-                        <div key={env} className="flex items-center gap-1.5">
-                          <span className="text-[10px] uppercase font-medium text-muted-foreground w-12 shrink-0">{env.slice(0, 4)}</span>
-                          <Input value={url} readOnly className="font-mono text-[10px] h-7 text-muted-foreground" />
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(url) }}>
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
-                            <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
-                          </Button>
-                        </div>
-                      )
-                    })}
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">
+                  Local API Server
+                </Label>
+                <Input
+                  placeholder="http://localhost:3001"
+                  value={project.supabaseUrl}
+                  onChange={(e) =>
+                    updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
+                  }
+                  className="text-xs h-8 font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Connect Unity SDK to a local Docker database for development.
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* CDN Endpoint */}
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Globe className="h-3 w-3" />
+                  CDN Endpoint
+                </Label>
+                {project.r2BucketUrl ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`}
+                      readOnly
+                      className="font-mono text-[10px] h-7 text-muted-foreground"
+                    />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`) }}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
+                      <a href={`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
+                    </Button>
                   </div>
-                </>
-              )}
+                ) : (
+                  <p className="text-[10px] text-muted-foreground italic">
+                    No versions published yet. Publish a version to enable CDN delivery.
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
