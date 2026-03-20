@@ -1,5 +1,5 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Plus,
   Trash2,
@@ -13,6 +13,8 @@ import {
   ChevronDown,
   X,
   Loader2,
+  Pencil,
+  Save,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -484,7 +486,7 @@ function ConfigValueEditor({
     case 'int': {
       const valid = raw === '' || /^-?\d+$/.test(raw)
       return (
-        <div className="flex items-center gap-1">
+        <div className="relative">
           <Input
             value={raw}
             onChange={(e) => setValue(e.target.value)}
@@ -492,7 +494,7 @@ function ConfigValueEditor({
             className={cn(base, 'w-full font-mono')}
           />
           {!valid && raw !== '' && (
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <AlertTriangle className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-amber-500" />
           )}
         </div>
       )
@@ -500,7 +502,7 @@ function ConfigValueEditor({
     case 'float': {
       const valid = raw === '' || /^-?\d+(\.\d+)?$/.test(raw)
       return (
-        <div className="flex items-center gap-1">
+        <div className="relative">
           <Input
             value={raw}
             onChange={(e) => setValue(e.target.value)}
@@ -508,7 +510,7 @@ function ConfigValueEditor({
             className={cn(base, 'w-full font-mono')}
           />
           {!valid && raw !== '' && (
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <AlertTriangle className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-amber-500" />
           )}
         </div>
       )
@@ -1061,9 +1063,20 @@ function DataPage() {
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Deferred save: buffer cell edits and table renames locally
+  const [dirtyEntries, setDirtyEntries] = useState<Map<string, Map<string, Record<string, unknown>>>>(new Map())
+  const [dirtyNames, setDirtyNames] = useState<Map<string, string>>(new Map())
+
   const activeId = selectedId || schemas[0]?.id || ''
   const selectedSchema = schemas.find((s) => s.id === activeId)
-  const { data: entries = [] } = useEntries(activeId)
+  const { data: serverEntries = [] } = useEntries(activeId)
+
+  // Merge server entries with local dirty overrides
+  const entries = serverEntries.map((e) => {
+    const schemaOverrides = dirtyEntries.get(activeId)
+    const override = schemaOverrides?.get(e.id)
+    return override ? { ...e, data: { ...e.data, ...override } } : e
+  })
 
   // Validation errors for current table
   const validationErrors: ValidationError[] = selectedSchema
@@ -1114,29 +1127,34 @@ function DataPage() {
     }
   }
 
-  const handleCellChange = async (
+  const handleCellChange = (
     entryId: string,
     fieldName: string,
     value: unknown,
   ) => {
-    const entry = entries.find((e) => e.id === entryId)
-    if (!entry) return
-    try {
-      await updateEntryMut.mutateAsync({ id: entryId, data: { ...entry.data, [fieldName]: value } })
-    } catch (err) {
-      toast.error(`Failed to update cell: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
+    if (!activeId) return
+    setDirtyEntries((prev) => {
+      const next = new Map(prev)
+      const schemaMap = new Map(next.get(activeId) ?? [])
+      const existing = schemaMap.get(entryId) ?? {}
+      schemaMap.set(entryId, { ...existing, [fieldName]: value })
+      next.set(activeId, schemaMap)
+      return next
+    })
   }
 
-  const handleRowDataChange = async (
+  const handleRowDataChange = (
     entryId: string,
     newData: Record<string, unknown>,
   ) => {
-    try {
-      await updateEntryMut.mutateAsync({ id: entryId, data: newData })
-    } catch (err) {
-      toast.error(`Failed to update row: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
+    if (!activeId) return
+    setDirtyEntries((prev) => {
+      const next = new Map(prev)
+      const schemaMap = new Map(next.get(activeId) ?? [])
+      schemaMap.set(entryId, newData)
+      next.set(activeId, schemaMap)
+      return next
+    })
   }
 
   const handleAddEnumOption = async (fieldName: string, newOption: string) => {
@@ -1225,12 +1243,78 @@ function DataPage() {
     const name = selectedSchema.name
     try {
       await deleteSchemaMut.mutateAsync(selectedSchema.id)
+      // Clean up dirty state for deleted table
+      setDirtyEntries((prev) => { const next = new Map(prev); next.delete(selectedSchema.id); return next })
+      setDirtyNames((prev) => { const next = new Map(prev); next.delete(selectedSchema.id); return next })
       setSelectedId('')
       toast.success(`Table "${name}" deleted`)
     } catch (err) {
       toast.error(`Failed to delete table: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
+
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  const handleRenameTable = () => {
+    if (!selectedSchema) return
+    setRenamingId(selectedSchema.id)
+  }
+
+  const commitRename = (schemaId: string, value: string) => {
+    const schema = schemas.find((s) => s.id === schemaId)
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== schema?.name) {
+      setDirtyNames((prev) => {
+        const next = new Map(prev)
+        next.set(schemaId, trimmed)
+        return next
+      })
+    } else {
+      // Revert: remove from dirty if same as original
+      setDirtyNames((prev) => {
+        const next = new Map(prev)
+        next.delete(schemaId)
+        return next
+      })
+    }
+    setRenamingId(null)
+  }
+
+  const handleSave = async () => {
+    try {
+      // Save dirty entry edits
+      for (const [schemaId, entryMap] of dirtyEntries) {
+        for (const [entryId, patchData] of entryMap) {
+          const entry = (schemaId === activeId ? serverEntries : []).find((e) => e.id === entryId)
+          if (entry) {
+            await updateEntryMut.mutateAsync({ id: entryId, data: { ...entry.data, ...patchData } })
+          }
+        }
+      }
+      // Save dirty table renames
+      for (const [schemaId, newName] of dirtyNames) {
+        await updateSchemaMut.mutateAsync({ id: schemaId, updates: { name: newName } })
+      }
+      setDirtyEntries(new Map())
+      setDirtyNames(new Map())
+      toast.success('All changes saved')
+    } catch (err) {
+      toast.error(`Failed to save: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // Ctrl+S to save
+  const hasDirty = dirtyEntries.size > 0 || dirtyNames.size > 0
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (hasDirty) handleSave()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [hasDirty])
 
   const handlePublish = async (
     env: 'development' | 'staging' | 'production',
@@ -1318,20 +1402,15 @@ function DataPage() {
 
   return (
     <PageTransition className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Data</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage configuration tables and entries.
-          </p>
-        </div>
-        {schemas.length > 0 && (
-          <Button onClick={() => setPublishOpen(true)}>
-            <Rocket className="h-4 w-4 mr-2" />
-            Publish
-          </Button>
-        )}
+      {/* ── Row 1: title ── */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Blueprint</h1>
+        <p className="text-muted-foreground mt-1">
+          Define table schemas and configure game data.
+        </p>
       </div>
+
+      <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
 
       {schemas.length === 0 ? (
         <Card className="border-dashed">
@@ -1350,68 +1429,79 @@ function DataPage() {
         </Card>
       ) : (
         <>
-          {/* ── toolbar ── */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg">
-              {schemas.map((s) => (
+          {/* ── Row 2: action buttons ── */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {selectedSchema && (
+                <Button variant="ghost" size="sm" onClick={handleRenameTable} title="Rename table">
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Rename
+                </Button>
+              )}
+              {selectedSchema && selectedSchema.fields.length > 0 && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5 mr-1" />
+                    Import
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleExport}>
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Export
+                  </Button>
+                </>
+              )}
+              {selectedSchema && (
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeleteTable}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => setCreateTableOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                New Table
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleSave} disabled={dirtyEntries.size === 0 && dirtyNames.size === 0}>
+                <Save className="h-3.5 w-3.5 mr-1" />
+                Save
+              </Button>
+            </div>
+          </div>
+
+          {/* ── Row 3: table tabs ── */}
+          <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {schemas.map((s) =>
+              renamingId === s.id ? (
+                <input
+                  key={s.id}
+                  autoFocus
+                  defaultValue={dirtyNames.get(s.id) ?? s.name}
+                  className="px-3 py-1.5 text-[13px] font-medium rounded-md bg-background text-foreground shadow-sm outline-none ring-1 ring-ring shrink-0 w-32"
+                  onBlur={(e) => commitRename(s.id, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename(s.id, e.currentTarget.value)
+                    if (e.key === 'Escape') setRenamingId(null)
+                  }}
+                />
+              ) : (
                 <button
                   key={s.id}
                   onClick={() => setSelectedId(s.id)}
+                  onDoubleClick={() => setRenamingId(s.id)}
                   className={cn(
-                    'px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-150',
+                    'relative px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-150 shrink-0',
                     activeId === s.id
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {s.name}
+                  {dirtyNames.get(s.id) ?? s.name}
+                  {(dirtyEntries.has(s.id) || dirtyNames.has(s.id)) && (
+                    <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-white" />
+                  )}
                 </button>
-              ))}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateTableOpen(true)}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              New Table
-            </Button>
-
-            {selectedSchema && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={handleDeleteTable}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                Delete
-              </Button>
-            )}
-
-            {selectedSchema && selectedSchema.fields.length > 0 && (
-              <div className="ml-auto flex items-center gap-1">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleImport}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="h-3.5 w-3.5 mr-1" />
-                  Import
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleExport}>
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  Export
-                </Button>
-              </div>
+              ),
             )}
           </div>
 
@@ -1516,9 +1606,15 @@ function DataPage() {
                               return (
                               <TableCell
                                 key={field.name}
-                                className={cn('p-1', hasError && 'ring-1 ring-inset ring-red-500/50', hasWarning && 'ring-1 ring-inset ring-amber-500/40')}
+                                className="p-1 relative"
                                 title={cellErrors.map((e) => e.message).join('\n') || undefined}
                               >
+                                {(hasError || hasWarning) && (
+                                  <AlertTriangle className={cn(
+                                    'pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 z-10',
+                                    hasError ? 'text-red-500' : 'text-amber-500',
+                                  )} />
+                                )}
                                 {field.type === 'config' ? (
                                   /* Config column = type picker */
                                   <OptionSelect

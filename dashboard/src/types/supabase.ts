@@ -157,6 +157,114 @@ export type Database = {
           role?: string
         }
       }
+      formulas: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          description: string
+          expression: string
+          variables: Json
+          output_mode: string
+          preview_inputs: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          project_id: string
+          name: string
+          description?: string
+          expression: string
+          variables?: Json
+          output_mode?: string
+          preview_inputs?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          description?: string
+          expression?: string
+          variables?: Json
+          output_mode?: string
+          preview_inputs?: Json
+          updated_at?: string
+        }
+      }
+      live_ops_events: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          description: string
+          type: string
+          status: string
+          start_at: string
+          end_at: string
+          color: string
+          config: Json
+          recurring: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          name: string
+          description?: string
+          type: string
+          status?: string
+          start_at: string
+          end_at: string
+          color?: string
+          config?: Json
+          recurring?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          name?: string
+          description?: string
+          type?: string
+          status?: string
+          start_at?: string
+          end_at?: string
+          color?: string
+          config?: Json
+          recurring?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      battle_pass_tiers: {
+        Row: {
+          id: string
+          event_id: string
+          tier: number
+          xp_required: number
+          free_reward: string
+          premium_reward: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          tier: number
+          xp_required?: number
+          free_reward?: string
+          premium_reward?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          tier?: number
+          xp_required?: number
+          free_reward?: string
+          premium_reward?: string
+        }
+      }
       versions: {
         Row: {
           data: Json

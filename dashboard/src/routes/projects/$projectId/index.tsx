@@ -259,7 +259,7 @@ await FluxManager.Instance.SyncAsync();`}
                   mcpServers: {
                     unity_flux: {
                       type: 'url',
-                      url: 'http://localhost:3001/mcp',
+                      url: 'https://flux.h1dr0n.org/api/mcp',
                     },
                   },
                 }, null, 2)}
@@ -274,7 +274,7 @@ await FluxManager.Instance.SyncAsync();`}
                       mcpServers: {
                         unity_flux: {
                           type: 'url',
-                          url: 'http://localhost:3001/mcp',
+                          url: 'https://flux.h1dr0n.org/api/mcp',
                         },
                       },
                     }, null, 2),
@@ -324,16 +324,18 @@ function ProjectOverview() {
 
   return (
     <PageTransition className="p-6 space-y-5">
-      {/* Description */}
-      {project.description && (
-        <p className="text-sm text-muted-foreground">{project.description}</p>
-      )}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
+        {project.description && (
+          <p className="text-sm text-muted-foreground">{project.description}</p>
+        )}
+      </div>
 
       {/* Main grid: left 3/5, right 2/5 */}
       <div className="grid gap-5 lg:grid-cols-5">
         {/* Activity — right 2/5, stretches to match left */}
-        <div className="lg:col-span-2 lg:order-2">
-          <Card className="flex flex-col max-h-[710px]">
+        <div className="lg:col-span-2 lg:order-2 flex">
+          <Card className="flex flex-col flex-1 min-h-0 max-h-[710px]">
             <CardHeader className="pb-2 shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">Recent Activity</CardTitle>

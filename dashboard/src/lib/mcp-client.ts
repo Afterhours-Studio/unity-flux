@@ -52,12 +52,14 @@ class McpClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private url: string
 
-  constructor(url = 'ws://localhost:3001/ws') {
+  constructor(url = import.meta.env.VITE_MCP_WS_URL || 'ws://localhost:3001/ws') {
     this.url = url
   }
 
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return
+    // Skip WebSocket connection when running against cloud (no local WS server)
+    if (!this.url.startsWith('ws')) return
 
     try {
       this.ws = new WebSocket(this.url)

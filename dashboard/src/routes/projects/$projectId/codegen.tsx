@@ -1,261 +1,125 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import { Copy, Download, Code, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-// import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProject } from '@/hooks/use-projects'
 import { useSchemas } from '@/hooks/use-schemas'
+import { entryKeys } from '@/hooks/use-entries'
+import * as db from '@/lib/supabase-data'
 import { cn } from '@/lib/utils'
 import { PageTransition } from '@/components/motion'
 import { toast } from 'sonner'
-import type { Schema, SchemaField } from '@/types/project'
+import { toPascalCase, generateFullCode } from '@/lib/codegen'
+import type { DataEntry } from '@/types/project'
 
 export const Route = createFileRoute('/projects/$projectId/codegen')({
   component: CodegenPage,
 })
 
 /* ═══════════════════════════════════════════════ */
-/*  Helpers                                        */
+/*  Syntax highlighting (tokenizer-based)          */
 /* ═══════════════════════════════════════════════ */
 
-/** Convert a slug like "my-cool-game" to PascalCase "MyCoolGame" */
-function toPascalCase(str: string): string {
-  return str
-    .replace(/[^a-zA-Z0-9]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join('')
+/** Escape a string for safe HTML insertion */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-/** Map SchemaField.type to C# type string */
-function csharpType(field: SchemaField, className: string): string {
-  switch (field.type) {
-    case 'string':
-      return 'string'
-    case 'integer':
-      return 'int'
-    case 'float':
-      return 'float'
-    case 'boolean':
-      return 'bool'
-    case 'enum':
-      return `${className}_${toPascalCase(field.name)}`
-    case 'list':
-      return 'List<string>'
-    case 'color':
-      return 'Color'
-    case 'config':
-      return 'string'
-    default:
-      return 'string'
-  }
-}
+const CS_KEYWORDS = new Set([
+  'using', 'namespace', 'public', 'private', 'static', 'class', 'enum',
+  'struct', 'return', 'var', 'new', 'where', 'readonly',
+])
+const CS_TYPES = new Set([
+  'int', 'string', 'float', 'bool', 'void', 'List', 'Color', 'JsonUtility', 'T',
+])
 
-/** Capitalize the first letter of a value for C# enum member names */
-function enumMemberName(value: string): string {
-  const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '')
-  if (!cleaned) return 'Unknown'
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
-}
+/** Highlight a code fragment (no strings or comments inside) using position-based spans */
+function highlightCode(text: string): string {
+  const spans: { start: number; end: number; cls: string }[] = []
 
-/* ═══════════════════════════════════════════════ */
-/*  Code generation                                */
-/* ═══════════════════════════════════════════════ */
-
-function generateEnumBlock(
-  field: SchemaField,
-  className: string,
-  indent: string,
-): string {
-  if (field.type !== 'enum' || !field.values?.length) return ''
-  const enumName = `${className}_${toPascalCase(field.name)}`
-  const members = field.values.map((v) => `${indent}    ${enumMemberName(v)}`).join(',\n')
-  return `${indent}public enum ${enumName}\n${indent}{\n${members}\n${indent}}\n\n`
-}
-
-function generateDataClass(schema: Schema, _namespace: string): string {
-  const className = toPascalCase(schema.name)
-  const indent = '    '
-
-  // Collect enum definitions
-  let enums = ''
-  for (const field of schema.fields) {
-    enums += generateEnumBlock(field, className, indent)
+  // Attributes: [Serializable], [SerializeField]
+  for (const m of text.matchAll(/\[(?:Serializable|SerializeField)\]/g)) {
+    spans.push({ start: m.index!, end: m.index! + m[0].length, cls: 'cs-keyword' })
   }
 
-  // Build field lines: [SerializeField] private + public getter
-  const fields = schema.fields
-    .map((f) => {
-      const csType = csharpType(f, className)
-      const privateName = `_${f.name}`
-      const publicName = toPascalCase(f.name)
-      return (
-        `${indent}${indent}[SerializeField] private ${csType} ${privateName};\n` +
-        `${indent}${indent}public ${csType} ${publicName} => ${privateName};`
-      )
-    })
-    .join('\n\n')
-
-  return (
-    `${enums}` +
-    `${indent}[Serializable]\n` +
-    `${indent}public class ${className}\n` +
-    `${indent}{\n` +
-    `${fields}\n` +
-    `${indent}}\n`
-  )
-}
-
-function generateConfigClass(schema: Schema): string {
-  const className = toPascalCase(schema.name)
-  const indent = '    '
-  return (
-    `${indent}[Serializable]\n` +
-    `${indent}public class ${className} : FluxConfigTable\n` +
-    `${indent}{\n` +
-    `${indent}${indent}// Access: ${className}.Get<int>("max_hp")\n` +
-    `${indent}}\n`
-  )
-}
-
-function generateFluxLoader(indent: string): string {
-  return (
-    `${indent}public static class FluxLoader\n` +
-    `${indent}{\n` +
-    `${indent}${indent}public static T Load<T>(string json) where T : class\n` +
-    `${indent}${indent}{\n` +
-    `${indent}${indent}${indent}return JsonUtility.FromJson<T>(json);\n` +
-    `${indent}${indent}}\n` +
-    `\n` +
-    `${indent}${indent}public static List<T> LoadList<T>(string json) where T : class\n` +
-    `${indent}${indent}{\n` +
-    `${indent}${indent}${indent}var wrapper = JsonUtility.FromJson<ListWrapper<T>>(json);\n` +
-    `${indent}${indent}${indent}return wrapper.items;\n` +
-    `${indent}${indent}}\n` +
-    `\n` +
-    `${indent}${indent}[Serializable]\n` +
-    `${indent}${indent}private class ListWrapper<T>\n` +
-    `${indent}${indent}{\n` +
-    `${indent}${indent}${indent}public List<T> items;\n` +
-    `${indent}${indent}}\n` +
-    `${indent}}\n`
-  )
-}
-
-function generateFullCode(
-  schemas: Schema[],
-  selectedIds: Set<string>,
-  namespace: string,
-): string {
-  const selected = schemas.filter((s) => selectedIds.has(s.id))
-  if (selected.length === 0) {
-    return '// No schemas selected. Check at least one schema on the left to generate code.'
+  // Keywords + types via word boundary scan
+  for (const m of text.matchAll(/\b[a-zA-Z_]\w*\b/g)) {
+    const word = m[0]
+    const cls = CS_KEYWORDS.has(word) ? 'cs-keyword' : CS_TYPES.has(word) ? 'cs-type' : null
+    if (!cls) continue
+    if (spans.some(s => m.index! >= s.start && m.index! < s.end)) continue
+    spans.push({ start: m.index!, end: m.index! + word.length, cls })
   }
 
-  const header =
-    '// Auto-generated by Unity Flux \u2014 do not edit manually\n' +
-    'using System;\n' +
-    'using System.Collections.Generic;\n' +
-    'using UnityEngine;\n'
-
-  const indent = '    '
-  let body = ''
-  for (const schema of selected) {
-    if (body) body += '\n'
-    if (schema.mode === 'config') {
-      body += generateConfigClass(schema)
-    } else {
-      body += generateDataClass(schema, namespace)
-    }
+  // Enum members: line is purely "  PascalName," or "  PascalName"
+  const enumMatch = text.match(/^(\s*)([A-Z][a-zA-Z0-9_]*)(,?)$/)
+  if (enumMatch && spans.length === 0) {
+    const ws = enumMatch[1], name = enumMatch[2], comma = enumMatch[3]
+    return `${esc(ws)}<span class="cs-enum">${esc(name)}</span>${comma}`
   }
 
-  // Always append FluxLoader
-  body += '\n' + generateFluxLoader(indent)
-
-  return `${header}\nnamespace ${namespace}\n{\n${body}}\n`
+  // Build output from sorted spans
+  spans.sort((a, b) => a.start - b.start)
+  let result = ''
+  let pos = 0
+  for (const s of spans) {
+    result += esc(text.slice(pos, s.start))
+    result += `<span class="${s.cls}">${esc(text.slice(s.start, s.end))}</span>`
+    pos = s.end
+  }
+  result += esc(text.slice(pos))
+  return result
 }
 
-/* ═══════════════════════════════════════════════ */
-/*  Syntax highlighting (simple span-based)        */
-/* ═══════════════════════════════════════════════ */
-
+/**
+ * Tokenize-then-highlight: split each line into string / comment / code tokens
+ * first, so highlight regexes never see HTML from other tokens.
+ */
 function highlightCSharp(code: string): string {
-  // Escape HTML entities first
-  let html = code
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  return code.split('\n').map((raw) => {
+    const out: string[] = []
+    let i = 0
+    let inStr = false
+    let buf = ''
 
-  // Comments (// ...) — must come first to avoid inner replacements
-  html = html.replace(
-    /(\/\/.*)/g,
-    '<span class="cs-comment">$1</span>',
-  )
-
-  // Strings ("...")
-  html = html.replace(
-    /(&quot;[^&]*&quot;|"[^"]*")/g,
-    '<span class="cs-string">$1</span>',
-  )
-
-  // Keywords
-  const keywords = [
-    'using',
-    'namespace',
-    'public',
-    'private',
-    'static',
-    'class',
-    'enum',
-    'struct',
-    'return',
-    'var',
-    'new',
-    'where',
-    'readonly',
-  ]
-  const kwPattern = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g')
-  html = html.replace(kwPattern, '<span class="cs-keyword">$1</span>')
-
-  // Attributes — [Serializable] etc.
-  html = html.replace(
-    /(\[Serializable\])/g,
-    '<span class="cs-keyword">$1</span>',
-  )
-
-  // Types
-  const types = [
-    'int',
-    'string',
-    'float',
-    'bool',
-    'void',
-    'List',
-    'Color',
-    'JsonUtility',
-    'T',
-  ]
-  const typePattern = new RegExp(`\\b(${types.join('|')})\\b`, 'g')
-  html = html.replace(typePattern, '<span class="cs-type">$1</span>')
-
-  // Enum member values inside enum blocks — capitalize pattern after indentation
-  // Match lines that are purely "    SomeValue," or "    SomeValue"
-  html = html.replace(
-    /^(\s*)((?:[A-Z][a-zA-Z0-9_]*))([,]?)$/gm,
-    (match, ws, name, comma) => {
-      // Only color if it looks like an enum member (no spans already, starts with uppercase, short)
-      if (match.includes('<span')) return match
-      if (/^[A-Z][a-zA-Z0-9_]*$/.test(name)) {
-        return `${ws}<span class="cs-enum">${name}</span>${comma}`
+    while (i < raw.length) {
+      if (!inStr && raw[i] === '/' && raw[i + 1] === '/') {
+        if (buf) { out.push(highlightCode(buf)); buf = '' }
+        out.push(`<span class="cs-comment">${esc(raw.slice(i))}</span>`)
+        buf = ''
+        i = raw.length
+        break
       }
-      return match
-    },
-  )
-
-  return html
+      if (raw[i] === '"') {
+        if (!inStr) {
+          if (buf) { out.push(highlightCode(buf)); buf = '' }
+          buf = '"'
+          inStr = true
+          i++
+          continue
+        } else {
+          buf += '"'
+          out.push(`<span class="cs-string">${esc(buf)}</span>`)
+          buf = ''
+          inStr = false
+          i++
+          continue
+        }
+      }
+      if (inStr && raw[i] === '\\' && i + 1 < raw.length) {
+        buf += raw[i] + raw[i + 1]
+        i += 2
+        continue
+      }
+      buf += raw[i]
+      i++
+    }
+    if (buf) out.push(inStr ? `<span class="cs-string">${esc(buf)}</span>` : highlightCode(buf))
+    return out.join('')
+  }).join('\n')
 }
 
 /* ═══════════════════════════════════════════════ */
@@ -268,6 +132,26 @@ function CodegenPage() {
   const { data: project } = useProject(projectId)
   const { data: schemas = [] } = useSchemas(projectId)
 
+  // Fetch entries for all config-mode schemas (needed to generate fields from rows)
+  const configSchemaIds = useMemo(
+    () => schemas.filter((s) => s.mode === 'config').map((s) => s.id),
+    [schemas],
+  )
+  const entryQueries = useQueries({
+    queries: configSchemaIds.map((sid) => ({
+      queryKey: entryKeys.bySchema(sid),
+      queryFn: () => db.listEntries(sid),
+      enabled: !!sid,
+    })),
+  })
+  const entriesMap = useMemo(() => {
+    const map = new Map<string, DataEntry[]>()
+    configSchemaIds.forEach((sid, i) => {
+      if (entryQueries[i]?.data) map.set(sid, entryQueries[i].data!)
+    })
+    return map
+  }, [configSchemaIds, entryQueries])
+
   const defaultNamespace = project ? toPascalCase(project.slug) : 'GameConfig'
   const [namespace, setNamespace] = useState(defaultNamespace)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -278,7 +162,6 @@ function CodegenPage() {
   // Keep selections in sync when schemas change (new schema added should be checked)
   const schemaIdSet = useMemo(() => new Set(schemas.map((s) => s.id)), [schemas])
   useMemo(() => {
-    // Add any newly-created schemas to selected set
     for (const id of schemaIdSet) {
       if (!selectedIds.has(id)) {
         setSelectedIds((prev) => new Set([...prev, id]))
@@ -288,8 +171,8 @@ function CodegenPage() {
   }, [schemaIdSet])
 
   const rawCode = useMemo(
-    () => generateFullCode(schemas, selectedIds, namespace || 'GameConfig'),
-    [schemas, selectedIds, namespace],
+    () => generateFullCode(schemas, selectedIds, namespace || 'GameConfig', entriesMap),
+    [schemas, selectedIds, namespace, entriesMap],
   )
 
   const highlightedHtml = useMemo(() => highlightCSharp(rawCode), [rawCode])

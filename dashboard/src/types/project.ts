@@ -56,6 +56,9 @@ export interface ActivityLog {
     | 'table_update'
     | 'row_add'
     | 'row_delete'
+    | 'event_create'
+    | 'event_update'
+    | 'event_delete'
   message: string
   meta?: Record<string, unknown>
   createdAt: string
@@ -98,4 +101,56 @@ export interface VersionDiff {
     totalRowsRemoved: number
     totalRowsModified: number
   }
+}
+
+// ─── Live Ops ─────────────────────────────────────────
+
+export type LiveOpsEventType = 'daily_login' | 'flash_sale' | 'limited_shop' | 'tournament' | 'season_pass' | 'maintenance' | 'world_boss' | 'custom'
+export type LiveOpsStatus = 'draft' | 'scheduled' | 'live' | 'ended' | 'cancelled'
+
+export interface LiveOpsEvent {
+  id: string
+  projectId: string
+  name: string
+  description: string
+  type: LiveOpsEventType
+  status: LiveOpsStatus
+  startAt: string
+  endAt: string
+  color: string
+  config: Record<string, unknown>
+  recurring: 'daily' | 'weekly' | 'monthly' | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BattlePassTier {
+  id: string
+  eventId: string
+  tier: number
+  xpRequired: number
+  freeReward: string
+  premiumReward: string
+}
+
+/* ── Formulas ── */
+
+export interface FormulaVariable {
+  name: string
+  type: 'int' | 'float'
+  defaultValue: number
+  description: string
+}
+
+export interface Formula {
+  id: string
+  projectId: string
+  name: string
+  description: string
+  expression: string
+  variables: FormulaVariable[]
+  outputMode: 'method' | 'lookup'
+  previewInputs: Record<string, number[]>
+  createdAt: string
+  updatedAt: string
 }

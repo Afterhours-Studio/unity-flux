@@ -23,7 +23,7 @@ interface AuthStore {
   // Profile
   fetchProfile: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
-  changePassword: (newPassword: string) => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   uploadAvatar: (file: File) => Promise<string>
 }
 

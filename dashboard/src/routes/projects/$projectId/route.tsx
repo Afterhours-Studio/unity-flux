@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, Link, useParams } from '@tanstack/react-router'
-import { Database, History, KeyRound, ArrowLeft, Settings, Code } from 'lucide-react'
+import { Database, History, KeyRound, ArrowLeft, Settings, Code, CalendarDays, FunctionSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/hooks/use-projects'
 import { Loader2 } from 'lucide-react'
@@ -12,8 +12,10 @@ export const Route = createFileRoute('/projects/$projectId')({
 
 const projectNavItems = [
   { to: '/projects/$projectId' as const, label: 'Overview', icon: KeyRound, exact: true },
-  { to: '/projects/$projectId/data' as const, label: 'Data', icon: Database, exact: false },
+  { to: '/projects/$projectId/data' as const, label: 'Blueprint', icon: Database, exact: false },
+  { to: '/projects/$projectId/formulas' as const, label: 'Formulas', icon: FunctionSquare, exact: false },
   { to: '/projects/$projectId/versions' as const, label: 'Versions', icon: History, exact: false },
+  { to: '/projects/$projectId/live-ops' as const, label: 'Live Ops', icon: CalendarDays, exact: false },
   { to: '/projects/$projectId/codegen' as const, label: 'Codegen', icon: Code, exact: false },
 ]
 
