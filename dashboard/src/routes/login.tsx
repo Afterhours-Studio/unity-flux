@@ -51,14 +51,14 @@ function LoginPage() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <motion.div
+          <motion.img
+            src="/flux-icon.png"
+            alt="Flux"
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.15 }}
-            className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground text-xl font-bold shadow-lg"
-          >
-            UF
-          </motion.div>
+            className="h-14 w-14 rounded-2xl shadow-lg"
+          />
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Unity Flux</h1>
             <p className="text-sm text-muted-foreground mt-1">

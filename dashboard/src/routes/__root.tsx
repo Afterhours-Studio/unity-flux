@@ -44,9 +44,7 @@ function RootComponent() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground text-lg font-bold shadow-lg">
-            UF
-          </div>
+          <img src="/flux-icon.png" alt="Flux" className="h-12 w-12 rounded-2xl shadow-lg" />
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       </div>
