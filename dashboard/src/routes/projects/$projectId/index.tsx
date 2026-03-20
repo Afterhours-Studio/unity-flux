@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useProject, useUpdateProject, useRegenerateApiKey } from '@/hooks/use-projects'
 import { useActivities } from '@/hooks/use-activities'
@@ -317,22 +318,16 @@ function CdnEndpointField({ project }: { project: Project }) {
         CDN Endpoint
       </Label>
       <div className="flex items-center gap-1.5">
-        <div className="flex h-7 rounded-md border bg-muted/30 p-0.5 gap-0.5 shrink-0">
-          {CDN_ENVS.map((e) => (
-            <button
-              key={e}
-              onClick={() => setEnv(e)}
-              className={cn(
-                'px-1.5 rounded text-[10px] font-medium transition-all',
-                env === e
-                  ? 'bg-background shadow-sm text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {e === 'development' ? 'Dev' : e === 'staging' ? 'Stg' : 'Prod'}
-            </button>
-          ))}
-        </div>
+        <Select value={env} onValueChange={(v) => setEnv(v as typeof CDN_ENVS[number])}>
+          <SelectTrigger className="h-7 w-auto shrink-0 text-xs gap-1 px-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="development">Development</SelectItem>
+            <SelectItem value="staging">Staging</SelectItem>
+            <SelectItem value="production">Production</SelectItem>
+          </SelectContent>
+        </Select>
         <Input
           value={cdnUrl ?? 'Not published yet'}
           readOnly
