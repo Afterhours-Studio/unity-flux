@@ -484,20 +484,17 @@ function ProjectOverview() {
                 {project.r2BucketUrl ? (
                   <div className="flex items-center gap-1.5">
                     <Input
-                      value={`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`}
+                      value={`${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`}
                       readOnly
                       className="font-mono text-[10px] h-7 text-muted-foreground"
                     />
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`) }}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(`${project.r2BucketUrl}/${project.slug}/{env}/master_version.json`) }}>
                       <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
-                      <a href={`${project.r2BucketUrl}/${project.slug}/${project.environment}/master_version.json`} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
                     </Button>
                   </div>
                 ) : (
                   <p className="text-[10px] text-muted-foreground italic">
-                    No versions published yet. Publish a version to enable CDN delivery.
+                    Publish a version to enable CDN delivery.
                   </p>
                 )}
               </div>

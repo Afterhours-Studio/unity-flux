@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -158,29 +157,6 @@ function ProjectSettingsPage() {
               <Copy className="h-3.5 w-3.5" />
             </Button>
           </div>
-        </div>
-
-        {/* Environment */}
-        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
-          <div>
-            <p className="text-sm font-medium">Environment</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Active target</p>
-          </div>
-          <Select
-            value={project.environment}
-            onValueChange={(value: 'development' | 'staging' | 'production') =>
-              updateProjectMut.mutate({ id: project.id, updates: { environment: value } })
-            }
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="development">Development</SelectItem>
-              <SelectItem value="staging">Staging</SelectItem>
-              <SelectItem value="production">Production</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         <Separator />
