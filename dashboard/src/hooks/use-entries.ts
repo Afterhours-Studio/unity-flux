@@ -48,3 +48,27 @@ export function useDeleteEntry() {
     },
   })
 }
+
+export function useCreateEntries() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ schemaId, rows, environment }: {
+      schemaId: string
+      rows: Record<string, unknown>[]
+      environment?: 'development' | 'staging' | 'production'
+    }) => db.createEntries(schemaId, rows, environment),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: entryKeys.bySchema(vars.schemaId) })
+    },
+  })
+}
+
+export function useDeleteEntries() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ schemaId, ids }: { schemaId: string; ids: string[] }) => db.deleteEntries(schemaId, ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['entries'] })
+    },
+  })
+}

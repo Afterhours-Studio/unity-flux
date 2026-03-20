@@ -73,6 +73,7 @@ export interface Version {
   environment: 'development' | 'staging' | 'production'
   status: 'active' | 'superseded' | 'rolled_back'
   data: Record<string, Record<string, unknown>[]>
+  tableHashes: Record<string, string>
   tableCount: number
   rowCount: number
   r2Url: string | null

@@ -1,5 +1,6 @@
 import { createFileRoute, useParams, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Copy,
   Eye,
@@ -28,7 +29,7 @@ import { useProject, useUpdateProject, useRegenerateApiKey } from '@/hooks/use-p
 import { useActivities } from '@/hooks/use-activities'
 import type { Project } from '@/types/project'
 import { toast } from 'sonner'
-import { PageTransition } from '@/components/motion'
+import { PageTransition, motion } from '@/components/motion'
 import { formatDistanceToNow } from 'date-fns'
 import type { ActivityLog } from '@/types/project'
 
@@ -69,6 +70,7 @@ function CopyableField({
   value: string
   secret?: boolean
 }) {
+  const { t } = useTranslation()
   const [visible, setVisible] = useState(!secret)
 
   return (
@@ -100,7 +102,7 @@ function CopyableField({
           className="h-8 w-8 shrink-0"
           onClick={() => {
             navigator.clipboard.writeText(value)
-            toast.success(`${label} copied`)
+            toast.success(t('overview.labelCopied', { label }))
           }}
         >
           <Copy className="h-3.5 w-3.5" />
@@ -113,6 +115,7 @@ function CopyableField({
 /* ═══════════════════════════════════════════════ */
 
 function QuickStartCard({ project }: { project: Project }) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<'install' | 'usage' | 'mcp'>('install')
   const gitUrl = 'https://github.com/your-studio/unity-flux-sdk.git'
   const envName =
@@ -123,7 +126,7 @@ function QuickStartCard({ project }: { project: Project }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Quick Start - Unity</CardTitle>
+          <CardTitle className="text-sm">{t('overview.quickStart')}</CardTitle>
           <div className="flex gap-1 bg-muted rounded-md p-0.5">
             <button
               onClick={() => setTab('install')}
@@ -134,7 +137,7 @@ function QuickStartCard({ project }: { project: Project }) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              Installation
+              {t('overview.installation')}
             </button>
             <button
               onClick={() => setTab('usage')}
@@ -145,7 +148,7 @@ function QuickStartCard({ project }: { project: Project }) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              Usage
+              {t('overview.usage')}
             </button>
             <button
               onClick={() => setTab('mcp')}
@@ -156,7 +159,7 @@ function QuickStartCard({ project }: { project: Project }) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              MCP
+              {t('overview.mcp')}
             </button>
           </div>
         </div>
@@ -165,20 +168,15 @@ function QuickStartCard({ project }: { project: Project }) {
         {tab === 'install' ? (
           <div className="space-y-2.5">
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">1.</span> Open{' '}
-              <code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-                Window &gt; Package Manager
-              </code>{' '}
-              in Unity
+              <span className="font-medium text-foreground">1.</span> {t('overview.installStep1').replace(/<\/?code>/g, '').split(/(?<=Package Manager)|(?=Window)/).length ? (
+                <>{t('overview.installStep1').split(/<code>|<\/code>/).map((part, i) => i % 2 === 1 ? <code key={i} className="bg-muted px-1 py-0.5 rounded text-[11px]">{part}</code> : part)}</>
+              ) : t('overview.installStep1')}
             </p>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">2.</span> Click{' '}
-              <code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-                + &gt; Add package from git URL
-              </code>
+              <span className="font-medium text-foreground">2.</span> {t('overview.installStep2').split(/<code>|<\/code>/).map((part, i) => i % 2 === 1 ? <code key={i} className="bg-muted px-1 py-0.5 rounded text-[11px]">{part}</code> : part)}
             </p>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">3.</span> Paste this URL:
+              <span className="font-medium text-foreground">3.</span> {t('overview.installStep3')}
             </p>
             <div className="relative group">
               <pre className="bg-muted p-2.5 rounded-lg text-[11px] font-mono overflow-x-auto pr-10">
@@ -190,24 +188,17 @@ function QuickStartCard({ project }: { project: Project }) {
                 className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={() => {
                   navigator.clipboard.writeText(gitUrl)
-                  toast.success('URL copied')
+                  toast.success(t('overview.urlCopied'))
                 }}
               >
                 <Copy className="h-3 w-3" />
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">4.</span> Create{' '}
-              <code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-                FluxConfig.asset
-              </code>{' '}
-              via{' '}
-              <code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-                Assets &gt; Create &gt; Flux Config
-              </code>
+              <span className="font-medium text-foreground">4.</span> {t('overview.installStep4').split(/<code>|<\/code>/).map((part, i) => i % 2 === 1 ? <code key={i} className="bg-muted px-1 py-0.5 rounded text-[11px]">{part}</code> : part)}
             </p>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">5.</span> Fill in Project ID and Anonymous Key from credentials above
+              <span className="font-medium text-foreground">5.</span> {t('overview.installStep5')}
             </p>
           </div>
         ) : tab === 'usage' ? (
@@ -234,7 +225,7 @@ await FluxManager.Instance.SyncAsync();`}
                 navigator.clipboard.writeText(
                   `FluxManager.Instance.Configure(\n  new FluxConfig {\n    ProjectSlug = "${project.slug}",\n    Environment = FluxEnvironment.${envName},\n    CdnBaseUrl  = "${cdnUrl}",\n    AnonKey     = "${project.anonKey}"\n  }\n);\n\nawait FluxManager.Instance.InitializeAsync();\nawait FluxManager.Instance.SyncAsync();`,
                 )
-                toast.success('Code copied')
+                toast.success(t('overview.codeCopied'))
               }}
             >
               <Copy className="h-3 w-3" />
@@ -243,11 +234,7 @@ await FluxManager.Instance.SyncAsync();`}
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Add this to your{' '}
-              <code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-                .claude/settings.local.json
-              </code>{' '}
-              to let AI agents manage this project:
+              {t('overview.mcpDescription').split(/<code>|<\/code>/).map((part, i) => i % 2 === 1 ? <code key={i} className="bg-muted px-1 py-0.5 rounded text-[11px]">{part}</code> : part)}
             </p>
             <div className="relative group">
               <pre className="bg-muted p-3 rounded-lg text-[11px] font-mono overflow-x-auto leading-relaxed pr-10">
@@ -275,13 +262,13 @@ await FluxManager.Instance.SyncAsync();`}
                       },
                     }, null, 2),
                   )
-                  toast.success('Config copied')
+                  toast.success(t('overview.configCopied'))
                 }}
               >
                 <Copy className="h-3 w-3" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground font-medium mt-3">Example prompts:</p>
+            <p className="text-xs text-muted-foreground font-medium mt-3">{t('overview.examplePrompts')}</p>
             <div className="space-y-1.5">
               <p className="text-[11px] text-muted-foreground font-mono bg-muted px-2 py-1.5 rounded">
                 "Create a table called Weapons with columns: name (string), damage (integer), rarity (enum: common, rare, epic)"
@@ -306,41 +293,86 @@ await FluxManager.Instance.SyncAsync();`}
 const CDN_ENVS = ['development', 'staging', 'production'] as const
 
 function CdnEndpointField({ project }: { project: Project }) {
+  const { t } = useTranslation()
   const [env, setEnv] = useState<typeof CDN_ENVS[number]>('development')
-  const cdnUrl = project.r2BucketUrl
-    ? `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const cdnBase = project.r2BucketUrl || null
+  const masterUrl = cdnBase
+    ? `${cdnBase}/${project.slug}/${env}/master_version.json`
     : null
+
+  const checkCdn = async () => {
+    if (!masterUrl) return
+    setStatus('loading')
+    try {
+      // HEAD request via no-cors won't give status, so open in new tab for full preview.
+      // Use a quick fetch attempt first to check reachability.
+      const res = await fetch(masterUrl, { method: 'GET', mode: 'cors' })
+      setStatus(res.ok ? 'ok' : 'error')
+    } catch {
+      // CORS block or network error — open in new tab as fallback
+      setStatus('error')
+    }
+  }
 
   return (
     <div className="grid gap-1">
-      <Label className="text-xs text-muted-foreground">
-        CDN Endpoint
-      </Label>
+      <div className="flex items-center justify-between pr-20">
+        <Label className="text-xs text-muted-foreground">
+          {t('overview.cdnEndpoint')}
+        </Label>
+        {status === 'loading' && (
+          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+        )}
+        {status === 'error' && (
+          <span className="text-[10px] text-destructive font-medium">Not published</span>
+        )}
+        {status === 'ok' && (
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+        )}
+      </div>
       <div className="flex items-center gap-1.5">
-        <Select value={env} onValueChange={(v) => setEnv(v as typeof CDN_ENVS[number])}>
+        <Select value={env} onValueChange={(v) => { setEnv(v as typeof CDN_ENVS[number]); setStatus('idle') }}>
           <SelectTrigger size="sm" className="!h-7 w-auto shrink-0 text-[10px] gap-1 px-2 py-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="development">Development</SelectItem>
-            <SelectItem value="staging">Staging</SelectItem>
-            <SelectItem value="production">Production</SelectItem>
+            <SelectItem value="development">{t('environments.development')}</SelectItem>
+            <SelectItem value="staging">{t('environments.staging')}</SelectItem>
+            <SelectItem value="production">{t('environments.production')}</SelectItem>
           </SelectContent>
         </Select>
-        <Input
-          value={cdnUrl ?? 'Not published yet'}
-          readOnly
-          className={cn('font-mono text-[10px] h-7', cdnUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
-        />
+        <div className="flex-1 min-w-0">
+          <Input
+            value={masterUrl ?? t('overview.notPublished')}
+            readOnly
+            className={cn('font-mono text-[10px] h-7', masterUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
+          />
+        </div>
         <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0"
-          disabled={!cdnUrl}
+          disabled={!masterUrl || status === 'loading'}
+          title="Open in new tab"
           onClick={() => {
-            if (cdnUrl) {
-              navigator.clipboard.writeText(cdnUrl)
-              toast.success('Copied to clipboard')
+            if (masterUrl) {
+              checkCdn()
+              window.open(masterUrl, '_blank')
+            }
+          }}
+        >
+          <ExternalLink className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          disabled={!masterUrl}
+          onClick={() => {
+            if (masterUrl) {
+              navigator.clipboard.writeText(masterUrl)
+              toast.success(t('overview.copiedToClipboard'))
             }
           }}
         >
@@ -352,6 +384,7 @@ function CdnEndpointField({ project }: { project: Project }) {
 }
 
 function ProjectOverview() {
+  const { t } = useTranslation()
   const { projectId } = useParams({ from: '/projects/$projectId/' })
   const { data: project, isLoading } = useProject(projectId)
   const updateProjectMut = useUpdateProject()
@@ -369,7 +402,7 @@ function ProjectOverview() {
   return (
     <PageTransition className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('overview.title')}</h1>
         {project.description && (
           <p className="text-sm text-muted-foreground">{project.description}</p>
         )}
@@ -379,16 +412,16 @@ function ProjectOverview() {
       <div className="grid gap-5 lg:grid-cols-5">
         {/* Activity — right 2/5, stretches to match left */}
         <div className="lg:col-span-2 lg:order-2 flex">
-          <Card className="flex flex-col flex-1 min-h-0 max-h-[700px]">
+          <Card className="flex flex-col flex-1 min-h-0 max-h-[780px]">
             <CardHeader className="pb-2 shrink-0">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Recent Activity</CardTitle>
+                <CardTitle className="text-sm">{t('overview.recentActivity')}</CardTitle>
                 <Link
                   to="/projects/$projectId/versions"
                   params={{ projectId }}
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
-                  Versions
+                  {t('nav.versions')}
                   <ArrowUpRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -398,10 +431,10 @@ function ProjectOverview() {
                 <div className="text-center py-12">
                   <Clock className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    No activity yet
+                    {t('overview.noActivity')}
                   </p>
                   <p className="text-xs text-muted-foreground/70 mt-1">
-                    Create tables and publish versions to see activity here.
+                    {t('overview.noActivityDescription')}
                   </p>
                 </div>
               ) : (
@@ -445,7 +478,7 @@ function ProjectOverview() {
           {/* SDK Credentials */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">SDK Credentials</CardTitle>
+              <CardTitle className="text-sm">{t('overview.sdkCredentials')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <CopyableField label="Project ID" value={project.id} />
@@ -455,7 +488,7 @@ function ProjectOverview() {
 
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
-                  API Key
+                  {t('overview.apiKey')}
                 </Label>
                 <div className="flex gap-1.5">
                   <Input
@@ -469,7 +502,7 @@ function ProjectOverview() {
                     className="h-8 w-8 shrink-0"
                     onClick={() => {
                       navigator.clipboard.writeText(project.apiKey)
-                      toast.success('API Key copied')
+                      toast.success(t('overview.apiKeyCopied'))
                     }}
                   >
                     <Copy className="h-3.5 w-3.5" />
@@ -480,21 +513,28 @@ function ProjectOverview() {
                     className="h-8 w-8 shrink-0"
                     onClick={async () => {
                       await regenerateApiKeyMut.mutateAsync(project.id)
-                      toast.success('API key regenerated')
+                      toast.success(t('overview.apiKeyRegenerated'))
                     }}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Server-side only.
+                  {t('overview.serverSideOnly')}
                 </p>
               </div>
 
               <CopyableField
-                label="Anonymous Key (Client-safe)"
+                label={t('overview.anonKey')}
                 value={project.anonKey}
                 secret
+              />
+
+              <Separator />
+
+              <CopyableField
+                label="CDN Base URL"
+                value={project.r2BucketUrl || 'Not configured'}
               />
             </CardContent>
           </Card>
@@ -502,27 +542,37 @@ function ProjectOverview() {
           {/* Configuration */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Configuration</CardTitle>
+              <CardTitle className="text-sm">{t('overview.configuration')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {/* Data Source Mode */}
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
-                  Data Source
+                  {t('overview.dataSource')}
                 </Label>
-                <div className="flex h-8 rounded-md border bg-muted/30 p-0.5 gap-0.5">
+                <div className="relative flex h-8 rounded-md border bg-muted/30 p-0.5 gap-0.5">
+                  {/* Sliding indicator */}
+                  <motion.div
+                    layoutId="data-source-indicator"
+                    className="absolute top-0.5 bottom-0.5 rounded bg-background shadow-sm"
+                    style={{
+                      width: 'calc((100% - 4px) / 3 - 2px)',
+                      left: `calc(2px + ${['cloud', 'local', 'both'].indexOf(project.dataSource)} * ((100% - 4px) / 3))`,
+                    }}
+                    transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+                  />
                   {(['cloud', 'local', 'both'] as const).map((mode) => (
                     <button
                       key={mode}
                       onClick={() => updateProjectMut.mutate({ id: project.id, updates: { dataSource: mode } })}
                       className={cn(
-                        'flex-1 rounded text-xs font-medium transition-all',
+                        'relative z-[1] flex-1 rounded text-xs font-medium transition-colors duration-200',
                         project.dataSource === mode
-                          ? 'bg-background shadow-sm text-foreground'
+                          ? 'text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
-                      {mode === 'cloud' ? 'Cloud' : mode === 'local' ? 'Local' : 'Both'}
+                      {t(`overview.${mode}`)}
                     </button>
                   ))}
                 </div>
@@ -536,7 +586,7 @@ function ProjectOverview() {
                   : 'opacity-30 pointer-events-none'
               )}>
                 <Label className="text-xs text-muted-foreground">
-                  Local API Server
+                  {t('overview.localApiServer')}
                 </Label>
                 <Input
                   placeholder="http://localhost:3001"

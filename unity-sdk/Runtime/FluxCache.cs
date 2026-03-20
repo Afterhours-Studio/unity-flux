@@ -74,6 +74,45 @@ namespace UnityFlux
             return null;
         }
 
+        // ─── Table Hashes (for delta sync) ────────────────
+
+        internal void SaveTableHashes(Dictionary<string, string> hashes)
+        {
+            try
+            {
+                var json = FluxJson.Serialize(hashes);
+                _memory["tableHashes"] = json;
+                WriteFile("hashes.json", json);
+            }
+            catch (System.Exception ex)
+            {
+                FluxLogger.Warn($"Failed to save table hashes: {ex.Message}");
+            }
+        }
+
+        internal Dictionary<string, string> LoadTableHashes()
+        {
+            try
+            {
+                // Memory
+                if (_memory.TryGetValue("tableHashes", out var cached))
+                    return FluxJson.Deserialize<Dictionary<string, string>>(cached);
+
+                // Disk
+                var disk = ReadFile("hashes.json");
+                if (disk != null)
+                {
+                    _memory["tableHashes"] = disk;
+                    return FluxJson.Deserialize<Dictionary<string, string>>(disk);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                FluxLogger.Warn($"Failed to load table hashes: {ex.Message}");
+            }
+            return null;
+        }
+
         // ─── Clear ───────────────────────────────────────
 
         internal void Clear()

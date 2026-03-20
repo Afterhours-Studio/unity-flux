@@ -16,11 +16,21 @@ namespace UnityFlux
         [Tooltip("Phase 1: http://localhost:3001  |  Phase 2: Supabase URL")]
         [SerializeField] private string _serverUrl = "http://localhost:3001";
 
-        [Tooltip("Phase 2: Cloudflare R2 CDN URL")]
+        [Tooltip("CDN base URL (e.g. https://cdn.example.com). Do NOT include slug or path — the SDK appends /{slug}/{env}/... automatically.")]
         [SerializeField] private string _cdnBaseUrl;
 
         [Header("Authentication")]
         [SerializeField] private string _anonKey;
+
+        [Header("Retry & Timeout")]
+        [Tooltip("HTTP request timeout in seconds")]
+        [SerializeField] private int _requestTimeoutSec = 30;
+
+        [Tooltip("Maximum number of retry attempts on failure")]
+        [SerializeField] private int _maxRetries = 3;
+
+        [Tooltip("Base delay between retries in seconds (doubles each attempt)")]
+        [SerializeField] private float _retryBaseDelaySec = 1f;
 
         public string ProjectId => _projectId;
         public string ProjectSlug => _projectSlug;
@@ -28,6 +38,9 @@ namespace UnityFlux
         public string ServerUrl => _serverUrl.TrimEnd('/');
         public string CdnBaseUrl => _cdnBaseUrl?.TrimEnd('/') ?? "";
         public string AnonKey => _anonKey;
+        public int RequestTimeoutSec => _requestTimeoutSec;
+        public int MaxRetries => _maxRetries;
+        public float RetryBaseDelaySec => _retryBaseDelaySec;
 
         public string EnvironmentString => _environment switch
         {

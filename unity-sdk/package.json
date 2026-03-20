@@ -18,5 +18,12 @@
     "ota",
     "game-data",
     "remote-config"
+  ],
+  "samples": [
+    {
+      "displayName": "Flux Example",
+      "description": "Basic example showing Flux initialization, syncing, and data access.",
+      "path": "Samples~/FluxExample"
+    }
   ]
 }

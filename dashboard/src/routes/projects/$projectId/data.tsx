@@ -1,5 +1,6 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus,
   Trash2,
@@ -17,6 +18,7 @@ import {
   Save,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -47,8 +49,9 @@ import {
 } from '@/components/ui/table'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/use-permissions'
 import { useSchemas, useCreateSchema, useUpdateSchema, useDeleteSchema } from '@/hooks/use-schemas'
-import { useEntries, useCreateEntry, useUpdateEntry, useDeleteEntry } from '@/hooks/use-entries'
+import { useEntries, useCreateEntry, useUpdateEntry, useDeleteEntry, useCreateEntries, useDeleteEntries } from '@/hooks/use-entries'
 import { usePublishVersion } from '@/hooks/use-versions'
 import { toast } from 'sonner'
 import type { SchemaField } from '@/types/project'
@@ -56,6 +59,7 @@ import { PageTransition } from '@/components/motion'
 import { TABLE_TEMPLATES } from '@/lib/table-templates'
 import { HexColorPicker } from 'react-colorful'
 import { validateSchema, getCellErrors, type ValidationError } from '@/lib/validation'
+import { CsvImportDialog } from '@/components/csv-import-dialog'
 
 export const Route = createFileRoute('/projects/$projectId/data')({
   component: DataPage,
@@ -1044,6 +1048,7 @@ function PublishDialog({
 
 function DataPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/data' })
+  const { t } = useTranslation()
   const { data: schemas = [] } = useSchemas(projectId)
   const createSchemaMut = useCreateSchema()
   const updateSchemaMut = useUpdateSchema()
@@ -1051,6 +1056,8 @@ function DataPage() {
   const createEntryMut = useCreateEntry()
   const updateEntryMut = useUpdateEntry()
   const deleteEntryMut = useDeleteEntry()
+  const createEntriesMut = useCreateEntries()
+  const deleteEntriesMut = useDeleteEntries()
   const publishVersionMut = usePublishVersion()
 
   const [selectedId, setSelectedId] = useState('')
@@ -1061,7 +1068,10 @@ function DataPage() {
     index: number
     field: SchemaField
   } | null>(null)
+  const { canEdit, canDelete, canImport, canPublish, isViewer } = usePermissions()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
 
   // Deferred save: buffer cell edits and table renames locally
   const [dirtyEntries, setDirtyEntries] = useState<Map<string, Map<string, Record<string, unknown>>>>(new Map())
@@ -1316,6 +1326,37 @@ function DataPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [hasDirty])
 
+  // Keyboard shortcuts for bulk row operations
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+A: select all rows (only when not in an input/textarea)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        if (entries.length > 0) {
+          e.preventDefault()
+          setSelectedRowIds(new Set(entries.map(entry => entry.id)))
+        }
+      }
+      // Escape: deselect
+      if (e.key === 'Escape' && selectedRowIds.size > 0) {
+        setSelectedRowIds(new Set())
+      }
+      // Delete: bulk delete
+      if (e.key === 'Delete' && selectedRowIds.size > 0 && selectedSchema && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        deleteEntriesMut.mutate(
+          { schemaId: selectedSchema.id, ids: Array.from(selectedRowIds) },
+          {
+            onSuccess: () => {
+              toast.success(`Deleted ${selectedRowIds.size} rows`)
+              setSelectedRowIds(new Set())
+            },
+          }
+        )
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [entries, selectedRowIds, selectedSchema, deleteEntriesMut])
+
   const handlePublish = async (
     env: 'development' | 'staging' | 'production',
   ) => {
@@ -1398,15 +1439,25 @@ function DataPage() {
     e.target.value = ''
   }
 
+  const handleBulkImport = async (rows: Record<string, unknown>[]) => {
+    if (!selectedSchema) return
+    await createEntriesMut.mutateAsync({
+      schemaId: selectedSchema.id,
+      rows,
+      environment: 'development',
+    })
+    toast.success(`Imported ${rows.length} rows`)
+  }
+
   /* ── render ── */
 
   return (
     <PageTransition className="p-6 space-y-5">
       {/* ── Row 1: title ── */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Blueprint</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('data.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Define table schemas and configure game data.
+          {t('data.description')}
         </p>
       </div>
 
@@ -1416,14 +1467,13 @@ function DataPage() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Database className="h-12 w-12 text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No tables yet</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('data.noTables')}</h3>
             <p className="text-muted-foreground text-sm mb-6 text-center max-w-sm">
-              Create your first configuration table to start managing game
-              data.
+              {t('data.noTablesDescription')}
             </p>
             <Button onClick={() => setCreateTableOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              New Table
+              {t('data.newTable')}
             </Button>
           </CardContent>
         </Card>
@@ -1432,39 +1482,41 @@ function DataPage() {
           {/* ── Row 2: action buttons ── */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              {selectedSchema && (
+              {selectedSchema && canEdit && (
                 <Button variant="ghost" size="sm" onClick={handleRenameTable} title="Rename table">
                   <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Rename
+                  {t('common.rename')}
                 </Button>
               )}
               {selectedSchema && selectedSchema.fields.length > 0 && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="h-3.5 w-3.5 mr-1" />
-                    Import
-                  </Button>
+                  {canImport && (
+                    <Button variant="ghost" size="sm" onClick={() => setCsvImportOpen(true)}>
+                      <Upload className="h-3.5 w-3.5 mr-1" />
+                      {t('common.import')}
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={handleExport}>
                     <Download className="h-3.5 w-3.5 mr-1" />
-                    Export
+                    {t('common.export')}
                   </Button>
                 </>
               )}
-              {selectedSchema && (
+              {selectedSchema && canDelete && (
                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeleteTable}>
                   <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete
+                  {t('common.delete')}
                 </Button>
               )}
             </div>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="sm" onClick={() => setCreateTableOpen(true)}>
                 <Plus className="h-3.5 w-3.5 mr-1" />
-                New Table
+                {t('data.newTable')}
               </Button>
               <Button variant="outline" size="sm" onClick={handleSave} disabled={dirtyEntries.size === 0 && dirtyNames.size === 0}>
                 <Save className="h-3.5 w-3.5 mr-1" />
-                Save
+                {t('common.save')}
               </Button>
             </div>
           </div>
@@ -1487,7 +1539,7 @@ function DataPage() {
               ) : (
                 <button
                   key={s.id}
-                  onClick={() => setSelectedId(s.id)}
+                  onClick={() => { setSelectedId(s.id); setSelectedRowIds(new Set()) }}
                   onDoubleClick={() => setRenamingId(s.id)}
                   className={cn(
                     'relative px-3 py-1.5 text-[13px] font-medium rounded-md transition-all duration-150 shrink-0',
@@ -1512,16 +1564,16 @@ function DataPage() {
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Columns3 className="h-8 w-8 text-muted-foreground/20 mb-3" />
                   <p className="text-muted-foreground text-sm mb-4">
-                    No columns yet. Add columns to start entering data.
+                    {t('data.noColumns')}
                   </p>
-                  <Button
+                  {canEdit && <Button
                     onClick={() => setAddColumnOpen(true)}
                     variant="outline"
                     size="sm"
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add Column
-                  </Button>
+                    {t('data.addColumn')}
+                  </Button>}
                 </CardContent>
               </Card>
             ) : (
@@ -1534,11 +1586,51 @@ function DataPage() {
                   </span>
                 </div>
               )}
+              {selectedRowIds.size > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+                  <span className="font-medium text-primary">{selectedRowIds.size} selected</span>
+                  <div className="flex-1" />
+                  {canDelete && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={async () => {
+                        if (!selectedSchema) return
+                        try {
+                          await deleteEntriesMut.mutateAsync({ schemaId: selectedSchema.id, ids: Array.from(selectedRowIds) })
+                          toast.success(`Deleted ${selectedRowIds.size} rows`)
+                          setSelectedRowIds(new Set())
+                        } catch (err) {
+                          toast.error(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      {t('data.deleteSelected')}
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setSelectedRowIds(new Set())}>
+                    {t('common.deselectAll')}
+                  </Button>
+                </div>
+              )}
               <div className="border rounded-lg overflow-hidden bg-card">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableHead className="!w-10 !min-w-10 !max-w-10 !px-0 text-center">
+                          <Checkbox
+                            checked={entries.length > 0 && selectedRowIds.size === entries.length ? true : selectedRowIds.size > 0 ? 'indeterminate' : false}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRowIds(new Set(entries.map(entry => entry.id)))
+                              } else {
+                                setSelectedRowIds(new Set())
+                              }
+                            }}
+                          />
+                        </TableHead>
                         <TableHead className="w-10 text-center text-xs">
                           #
                         </TableHead>
@@ -1571,7 +1663,7 @@ function DataPage() {
                           </TableHead>
                         ))}
                         <TableHead className="w-24">
-                          <Button
+                          {canEdit && <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 text-xs text-muted-foreground"
@@ -1579,7 +1671,7 @@ function DataPage() {
                           >
                             <Plus className="h-3.5 w-3.5 mr-1" />
                             Column
-                          </Button>
+                          </Button>}
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1587,15 +1679,26 @@ function DataPage() {
                       {entries.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={selectedSchema.fields.length + 2}
+                            colSpan={selectedSchema.fields.length + 3}
                             className="text-center py-8 text-sm text-muted-foreground"
                           >
-                            No rows yet. Click "Add row" below.
+                            {t('data.noRows')}
                           </TableCell>
                         </TableRow>
                       ) : (
                         entries.map((entry, rowIdx) => (
                           <TableRow key={entry.id} className="group">
+                            <TableCell className="!w-10 !min-w-10 !max-w-10 !px-0 text-center">
+                              <Checkbox
+                                checked={selectedRowIds.has(entry.id)}
+                                onCheckedChange={(checked) => {
+                                  const next = new Set(selectedRowIds)
+                                  if (checked) next.add(entry.id)
+                                  else next.delete(entry.id)
+                                  setSelectedRowIds(next)
+                                }}
+                              />
+                            </TableCell>
                             <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
                               {rowIdx + 1}
                             </TableCell>
@@ -1665,21 +1768,21 @@ function DataPage() {
                               )
                             })}
                             <TableCell className="p-1">
-                              <Button
+                              {canDelete && <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={async () => {
                                   try {
                                     await deleteEntryMut.mutateAsync(entry.id)
-                                    toast.success('Row deleted')
+                                    toast.success(t('data.rowDeleted'))
                                   } catch (err) {
                                     toast.error(`Failed to delete row: ${err instanceof Error ? err.message : 'Unknown error'}`)
                                   }
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
+                              </Button>}
                             </TableCell>
                           </TableRow>
                         ))
@@ -1687,13 +1790,13 @@ function DataPage() {
                     </TableBody>
                   </Table>
                 </div>
-                <button
+                {canEdit && <button
                   onClick={handleAddRow}
                   className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/30 border-t transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add row
-                </button>
+                  {t('data.addRow')}
+                </button>}
               </div>
             </>
             ))}
@@ -1732,6 +1835,12 @@ function DataPage() {
         open={publishOpen}
         onOpenChange={setPublishOpen}
         onPublish={handlePublish}
+      />
+      <CsvImportDialog
+        open={csvImportOpen}
+        onOpenChange={setCsvImportOpen}
+        schema={selectedSchema}
+        onImport={handleBulkImport}
       />
     </PageTransition>
   )

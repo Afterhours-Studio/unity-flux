@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using UnityFlux.Internal;
 
 namespace UnityFlux
@@ -26,11 +28,19 @@ namespace UnityFlux
         public void Configure(FluxConfig config)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
-            _client = new FluxClient(config.ServerUrl, config.AnonKey);
+            _client = new FluxClient(
+                config.ServerUrl,
+                config.CdnBaseUrl,
+                config.ProjectSlug,
+                config.AnonKey,
+                config.RequestTimeoutSec,
+                config.MaxRetries,
+                config.RetryBaseDelaySec);
             _cache = new FluxCache(config.ProjectId, config.EnvironmentString);
             _dataStore = new FluxDataStore();
 
-            FluxLogger.Log($"Configured: {config.ProjectSlug} ({config.EnvironmentString})");
+            var mode = _client.UseCdn ? "CDN" : "API";
+            FluxLogger.Log($"Configured: {config.ProjectSlug} ({config.EnvironmentString}) [{mode}]");
         }
 
         /// <summary>
@@ -71,6 +81,7 @@ namespace UnityFlux
 
         /// <summary>
         /// Check for new version and download if available.
+        /// Uses delta sync to only download tables whose hashes have changed.
         /// Returns true if data was updated, false if already latest.
         /// </summary>
         public async Task<bool> SyncAsync()
@@ -80,33 +91,105 @@ namespace UnityFlux
 
             try
             {
-                var hasNew = await _client.HasNewVersionAsync(
-                    _config.ProjectId, _config.EnvironmentString, CurrentVersion);
+                // Fetch manifest (lightweight - no data payload)
+                var manifest = await _client.FetchVersionManifestAsync(
+                    _config.ProjectId, _config.EnvironmentString);
 
-                if (!hasNew)
+                if (manifest == null)
+                {
+                    SetState(_dataStore.HasData ? FluxState.Ready : FluxState.Error);
+                    return false;
+                }
+
+                // Already up to date?
+                if (manifest.versionTag == CurrentVersion)
                 {
                     FluxLogger.Log("Already up to date");
                     SetState(FluxState.Ready);
                     return false;
                 }
 
-                FluxLogger.Log("New version available - downloading...");
+                // Load cached hashes
+                var cachedHashes = _cache.LoadTableHashes();
 
-                var configJson = await _client.FetchConfigDataAsync(
-                    _config.ProjectId, _config.EnvironmentString);
+                // Determine which tables changed
+                List<string> changedTables = null;
+                if (manifest.tableHashes != null)
+                {
+                    changedTables = new List<string>();
+                    foreach (var kvp in manifest.tableHashes)
+                    {
+                        string cachedHash;
+                        if (cachedHashes == null || !cachedHashes.TryGetValue(kvp.Key, out cachedHash) || cachedHash != kvp.Value)
+                        {
+                            changedTables.Add(kvp.Key);
+                        }
+                    }
+                }
 
-                var version = await _client.FetchActiveVersionAsync(
-                    _config.ProjectId, _config.EnvironmentString);
+                if (changedTables != null && changedTables.Count == 0)
+                {
+                    // Hashes match but version tag is different - just update the tag
+                    CurrentVersion = manifest.versionTag;
+                    _cache.SaveVersionTag(manifest.versionTag);
+                    if (manifest.tableHashes != null)
+                        _cache.SaveTableHashes(manifest.tableHashes);
+                    SetState(FluxState.Ready);
+                    OnVersionUpdated?.Invoke(manifest.versionTag);
+                    return true;
+                }
 
-                // Update cache + memory
-                _cache.SaveConfig(configJson);
-                _cache.SaveVersionTag(version.versionTag);
-                _dataStore.Load(configJson);
-                CurrentVersion = version.versionTag;
+                // Delta sync is only available via REST API (per-table endpoints)
+                if (!_client.UseCdn && changedTables != null &&
+                    changedTables.Count < (manifest.tableCount > 0 ? manifest.tableCount : 999))
+                {
+                    // Delta sync: only download changed tables
+                    FluxLogger.Log($"Delta sync: downloading {changedTables.Count} of {manifest.tableCount} tables");
+                    var existingJson = _cache.LoadConfig();
+                    var existingData = existingJson != null ? FluxJson.ParseObject(existingJson) : new JObject();
 
-                FluxLogger.Log($"Synced to {version.versionTag} ({version.tableCount} tables, {version.rowCount} rows)");
+                    foreach (var tableName in changedTables)
+                    {
+                        var tableJson = await _client.FetchTableDataAsync(
+                            _config.ProjectId, manifest.id, tableName);
+                        existingData[tableName] = JArray.Parse(tableJson);
+                    }
+
+                    // Remove tables that no longer exist in the new version
+                    if (manifest.tableHashes != null)
+                    {
+                        var removedTables = new List<string>();
+                        foreach (var prop in existingData.Properties())
+                        {
+                            if (!manifest.tableHashes.ContainsKey(prop.Name))
+                                removedTables.Add(prop.Name);
+                        }
+                        foreach (var name in removedTables)
+                            existingData.Remove(name);
+                    }
+
+                    var configJson = existingData.ToString();
+                    _cache.SaveConfig(configJson);
+                    _dataStore.Load(configJson);
+                }
+                else
+                {
+                    // Full download (always used for CDN mode)
+                    FluxLogger.Log("Full sync: downloading all tables");
+                    var configJson = await _client.FetchConfigDataAsync(
+                        _config.ProjectId, _config.EnvironmentString);
+                    _cache.SaveConfig(configJson);
+                    _dataStore.Load(configJson);
+                }
+
+                CurrentVersion = manifest.versionTag;
+                _cache.SaveVersionTag(manifest.versionTag);
+                if (manifest.tableHashes != null)
+                    _cache.SaveTableHashes(manifest.tableHashes);
+
+                FluxLogger.Log($"Synced to {manifest.versionTag} ({manifest.tableCount} tables, {manifest.rowCount} rows)");
                 SetState(FluxState.Ready);
-                OnVersionUpdated?.Invoke(version.versionTag);
+                OnVersionUpdated?.Invoke(manifest.versionTag);
                 return true;
             }
             catch (Exception ex)

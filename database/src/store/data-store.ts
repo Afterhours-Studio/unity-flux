@@ -1,4 +1,4 @@
-import type { Project, Schema, SchemaField, DataEntry, Version, VersionDiff, ActivityLog, Environment } from './types.js'
+import type { Project, Schema, SchemaField, DataEntry, Version, VersionDiff, ActivityLog, Environment, WebhookRegistration } from './types.js'
 
 /**
  * Abstract DataStore interface — implemented by JsonStore (file) and PostgresStore (database).
@@ -32,6 +32,8 @@ export interface DataStore {
   createEntry(schemaId: string, data: Record<string, unknown>, environment?: Environment): Promise<DataEntry>
   updateEntry(id: string, data: Record<string, unknown>): Promise<DataEntry>
   deleteEntry(id: string): Promise<void>
+  createEntries(schemaId: string, rows: Record<string, unknown>[], environment?: Environment): Promise<DataEntry[]>
+  deleteEntries(ids: string[]): Promise<void>
 
   // Versions
   listVersions(projectId: string): Promise<Version[]>
@@ -43,4 +45,9 @@ export interface DataStore {
 
   // Activity
   listActivity(projectId: string, limit?: number): Promise<ActivityLog[]>
+
+  // Webhooks
+  listWebhooks(projectId: string): Promise<WebhookRegistration[]>
+  createWebhook(projectId: string, url: string, secret: string, events: string[]): Promise<WebhookRegistration>
+  deleteWebhook(id: string): Promise<void>
 }

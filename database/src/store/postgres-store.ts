@@ -1,10 +1,20 @@
 import pg from 'pg'
+import { createHash } from 'node:crypto'
 import type { DataStore } from './data-store.js'
-import type { Project, Schema, SchemaField, DataEntry, Version, VersionDiff, VersionTableDiff, ActivityLog, Environment } from './types.js'
+import type { Project, Schema, SchemaField, DataEntry, Version, VersionDiff, VersionTableDiff, ActivityLog, Environment, WebhookRegistration } from './types.js'
 import { generateId, generateProjectId, generateApiKey, generateAnonKey } from '../util/id.js'
 import { nextVersionTag } from '../util/version-tag.js'
 
 const { Pool } = pg
+
+function computeTableHashes(data: Record<string, Record<string, unknown>[]>): Record<string, string> {
+  const hashes: Record<string, string> = {}
+  for (const [tableName, rows] of Object.entries(data)) {
+    const json = JSON.stringify(rows)
+    hashes[tableName] = createHash('sha256').update(json).digest('hex')
+  }
+  return hashes
+}
 
 export class PostgresStore implements DataStore {
   private pool: pg.Pool
@@ -70,6 +80,7 @@ export class PostgresStore implements DataStore {
       id: r.id as string, projectId: r.project_id as string, versionTag: r.version_tag as string,
       environment: r.environment as Environment, status: r.status as Version['status'],
       data: r.data as Record<string, Record<string, unknown>[]>,
+      tableHashes: (r.table_hashes as Record<string, string>) ?? {},
       tableCount: r.table_count as number, rowCount: r.row_count as number,
       publishedAt: (r.published_at as Date).toISOString(),
     }
@@ -265,7 +276,12 @@ export class PostgresStore implements DataStore {
       [JSON.stringify(data), id],
     )
     if (rows.length === 0) throw new Error(`Entry not found: ${id}`)
-    return this.toEntry(rows[0])
+    const entry = this.toEntry(rows[0])
+    const schema = await this.getSchema(entry.schemaId)
+    if (schema) {
+      await this.insertActivity(schema.projectId, 'row_update', `Updated row in "${schema.name}"`)
+    }
+    return entry
   }
 
   async deleteEntry(id: string): Promise<void> {
@@ -277,6 +293,38 @@ export class PostgresStore implements DataStore {
         await this.insertActivity(schema.projectId, 'row_delete', `Deleted row from "${schema.name}"`)
       }
     }
+  }
+
+  async createEntries(schemaId: string, rows: Record<string, unknown>[], environment: Environment = 'development'): Promise<DataEntry[]> {
+    const schema = await this.getSchema(schemaId)
+    const entries: DataEntry[] = []
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      for (const row of rows) {
+        const id = generateId()
+        const { rows: inserted } = await client.query(
+          `INSERT INTO entries (id, schema_id, data, environment)
+           VALUES ($1, $2, $3, $4) RETURNING *`,
+          [id, schemaId, JSON.stringify(row), environment],
+        )
+        entries.push(this.toEntry(inserted[0]))
+      }
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+    if (schema) {
+      await this.insertActivity(schema.projectId, 'row_add', `Added ${rows.length} rows to "${schema.name}"`)
+    }
+    return entries
+  }
+
+  async deleteEntries(ids: string[]): Promise<void> {
+    await this.query('DELETE FROM entries WHERE id = ANY($1)', [ids])
   }
 
   // ─── Versions ─────────────────────────────────────────
@@ -299,6 +347,9 @@ export class PostgresStore implements DataStore {
       rowCount += entries.length
     }
 
+    // Compute table hashes for delta sync
+    const tableHashes = computeTableHashes(snapshot)
+
     // Get version tag
     const versions = await this.listVersions(projectId)
     const rawVersions: Version[] = versions // already typed
@@ -313,9 +364,9 @@ export class PostgresStore implements DataStore {
 
     const id = generateId()
     const { rows } = await this.query(
-      `INSERT INTO versions (id, project_id, version_tag, environment, status, data, table_count, row_count)
-       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7) RETURNING *`,
-      [id, projectId, versionTag, environment, JSON.stringify(snapshot), schemas.length, rowCount],
+      `INSERT INTO versions (id, project_id, version_tag, environment, status, data, table_hashes, table_count, row_count)
+       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8) RETURNING *`,
+      [id, projectId, versionTag, environment, JSON.stringify(snapshot), JSON.stringify(tableHashes), schemas.length, rowCount],
     )
 
     await this.insertActivity(projectId, 'publish', `Published ${versionTag} to ${environment}`)
@@ -338,10 +389,12 @@ export class PostgresStore implements DataStore {
     )
 
     const id = generateId()
+    const promotedData = JSON.parse(JSON.stringify(sourceVersion.data))
+    const tableHashes = computeTableHashes(promotedData)
     const { rows } = await this.query(
-      `INSERT INTO versions (id, project_id, version_tag, environment, status, data, table_count, row_count)
-       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7) RETURNING *`,
-      [id, sourceVersion.projectId, versionTag, targetEnv, JSON.stringify(sourceVersion.data), sourceVersion.tableCount, sourceVersion.rowCount],
+      `INSERT INTO versions (id, project_id, version_tag, environment, status, data, table_hashes, table_count, row_count)
+       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8) RETURNING *`,
+      [id, sourceVersion.projectId, versionTag, targetEnv, JSON.stringify(promotedData), JSON.stringify(tableHashes), sourceVersion.tableCount, sourceVersion.rowCount],
     )
 
     await this.insertActivity(sourceVersion.projectId, 'promote', `Promoted ${sourceVersion.versionTag} → ${targetEnv} as ${versionTag}`)
@@ -455,5 +508,38 @@ export class PostgresStore implements DataStore {
       : 'SELECT * FROM activities WHERE project_id = $1 ORDER BY created_at DESC'
     const { rows } = await this.query(q, limit ? [projectId, limit] : [projectId])
     return rows.map(r => this.toActivity(r))
+  }
+
+  // ─── Webhooks ───────────────────────────────────────────
+
+  private toWebhook(r: Record<string, unknown>): WebhookRegistration {
+    return {
+      id: r.id as string,
+      projectId: r.project_id as string,
+      url: r.url as string,
+      secret: r.secret as string,
+      events: r.events as ActivityLog['type'][],
+      active: r.active as boolean,
+      createdAt: (r.created_at as Date).toISOString(),
+    }
+  }
+
+  async listWebhooks(projectId: string): Promise<WebhookRegistration[]> {
+    const { rows } = await this.query('SELECT * FROM webhooks WHERE project_id = $1', [projectId])
+    return rows.map(r => this.toWebhook(r))
+  }
+
+  async createWebhook(projectId: string, url: string, secret: string, events: string[]): Promise<WebhookRegistration> {
+    const id = generateId()
+    const { rows } = await this.query(
+      `INSERT INTO webhooks (id, project_id, url, secret, events)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, projectId, url, secret, JSON.stringify(events)],
+    )
+    return this.toWebhook(rows[0])
+  }
+
+  async deleteWebhook(id: string): Promise<void> {
+    await this.query('DELETE FROM webhooks WHERE id = $1', [id])
   }
 }

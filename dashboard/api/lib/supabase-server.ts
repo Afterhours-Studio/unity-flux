@@ -3,6 +3,7 @@
  * Uses service role key (bypass RLS) — for MCP admin tools only.
  */
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
 import { isR2Configured, uploadConfigVersion, updateMasterVersion } from './r2.js'
 
 const supabaseUrl = process.env.SUPABASE_URL!
@@ -43,6 +44,7 @@ interface Version {
   id: string; projectId: string; versionTag: string
   environment: Environment; status: 'active' | 'superseded' | 'rolled_back'
   data: Record<string, Record<string, unknown>[]>
+  tableHashes: Record<string, string>
   tableCount: number; rowCount: number; r2Url: string | null; publishedAt: string
 }
 
@@ -86,6 +88,17 @@ interface Formula {
   expression: string; variables: FormulaVariable[]
   outputMode: 'method' | 'lookup'; previewInputs: Record<string, number[]>
   createdAt: string; updatedAt: string
+}
+
+// ─── Hash Helper ────────────────────────────────────────
+
+function computeTableHashes(data: Record<string, Record<string, unknown>[]>): Record<string, string> {
+  const hashes: Record<string, string> = {}
+  for (const [tableName, rows] of Object.entries(data)) {
+    const json = JSON.stringify(rows)
+    hashes[tableName] = createHash('sha256').update(json).digest('hex')
+  }
+  return hashes
 }
 
 // ─── ID Helpers ────────────────────────────────────────
@@ -135,7 +148,7 @@ function toEntry(r: any): DataEntry {
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toVersion(r: any): Version {
-  return { id: r.id, projectId: r.project_id, versionTag: r.version_tag, environment: r.environment, status: r.status, data: r.data, tableCount: r.table_count, rowCount: r.row_count, r2Url: r.r2_url ?? null, publishedAt: r.published_at }
+  return { id: r.id, projectId: r.project_id, versionTag: r.version_tag, environment: r.environment, status: r.status, data: r.data, tableHashes: r.table_hashes ?? {}, tableCount: r.table_count, rowCount: r.row_count, r2Url: r.r2_url ?? null, publishedAt: r.published_at }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toActivity(r: any): ActivityLog {
@@ -336,13 +349,14 @@ export async function publishVersion(projectId: string, environment: Environment
   const snapshot: Record<string, Record<string, unknown>[]> = {}
   let rowCount = 0
   for (const schema of schemas) { const entries = await listEntries(schema.id); snapshot[schema.name] = entries.map(e => e.data); rowCount += entries.length }
+  const tableHashes = computeTableHashes(snapshot)
   const versions = await listVersions(projectId)
   const versionTag = nextVersionTag(versions, projectId, environment)
   await supabase.from('versions').update({ status: 'superseded' }).eq('project_id', projectId).eq('environment', environment).eq('status', 'active')
   const id = generateId()
   const { data, error } = await supabase.from('versions').insert({
     id, project_id: projectId, version_tag: versionTag, environment, status: 'active',
-    data: snapshot as unknown as Record<string, unknown>, table_count: schemas.length, row_count: rowCount,
+    data: snapshot as unknown as Record<string, unknown>, table_hashes: tableHashes as unknown as Record<string, unknown>, table_count: schemas.length, row_count: rowCount,
   }).select().single()
   if (error) throw error
   await insertActivity(projectId, 'publish', `Published ${versionTag} to ${environment}`)
@@ -378,9 +392,10 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
   const versionTag = nextVersionTag(versions, sv.projectId, targetEnv)
   await supabase.from('versions').update({ status: 'superseded' }).eq('project_id', sv.projectId).eq('environment', targetEnv).eq('status', 'active')
   const id = generateId()
+  const promotedTableHashes = computeTableHashes(sv.data)
   const { data, error } = await supabase.from('versions').insert({
     id, project_id: sv.projectId, version_tag: versionTag, environment: targetEnv, status: 'active',
-    data: sv.data as unknown as Record<string, unknown>, table_count: sv.tableCount, row_count: sv.rowCount,
+    data: sv.data as unknown as Record<string, unknown>, table_hashes: promotedTableHashes as unknown as Record<string, unknown>, table_count: sv.tableCount, row_count: sv.rowCount,
   }).select().single()
   if (error) throw error
   await insertActivity(sv.projectId, 'promote', `Promoted ${sv.versionTag} → ${targetEnv} as ${versionTag}`)

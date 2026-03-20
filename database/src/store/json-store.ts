@@ -1,8 +1,18 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import type { DataStore } from './data-store.js'
-import type { StoreData, Project, Schema, SchemaField, DataEntry, Version, VersionDiff, VersionTableDiff, ActivityLog, Environment } from './types.js'
+import type { StoreData, Project, Schema, SchemaField, DataEntry, Version, VersionDiff, VersionTableDiff, ActivityLog, Environment, WebhookRegistration } from './types.js'
 import { generateId, generateProjectId, generateApiKey, generateAnonKey } from '../util/id.js'
 import { nextVersionTag } from '../util/version-tag.js'
+
+function computeTableHashes(data: Record<string, Record<string, unknown>[]>): Record<string, string> {
+  const hashes: Record<string, string> = {}
+  for (const [tableName, rows] of Object.entries(data)) {
+    const json = JSON.stringify(rows)
+    hashes[tableName] = createHash('sha256').update(json).digest('hex')
+  }
+  return hashes
+}
 
 function makeActivity(projectId: string, type: ActivityLog['type'], message: string): ActivityLog {
   return { id: generateId(), projectId, type, message, createdAt: new Date().toISOString() }
@@ -15,7 +25,7 @@ export class JsonStore implements DataStore {
     try {
       return JSON.parse(readFileSync(this.filePath, 'utf-8'))
     } catch {
-      return { projects: [], schemas: [], entries: [], versions: [], activities: [] }
+      return { projects: [], schemas: [], entries: [], versions: [], activities: [], webhooks: [] }
     }
   }
 
@@ -83,6 +93,7 @@ export class JsonStore implements DataStore {
     data.entries = data.entries.filter(e => !schemaIds.includes(e.schemaId))
     data.versions = data.versions.filter(v => v.projectId !== id)
     data.activities = data.activities.filter(a => a.projectId !== id)
+    if (data.webhooks) data.webhooks = data.webhooks.filter(w => w.projectId !== id)
     this.write(data)
   }
 
@@ -226,6 +237,10 @@ export class JsonStore implements DataStore {
     const idx = data.entries.findIndex(e => e.id === id)
     if (idx === -1) throw new Error(`Entry not found: ${id}`)
     data.entries[idx] = { ...data.entries[idx], data: entryData, updatedAt: new Date().toISOString() }
+    const schema = data.schemas.find(s => s.id === data.entries[idx].schemaId)
+    if (schema) {
+      data.activities.push(makeActivity(schema.projectId, 'row_update', `Updated row in "${schema.name}"`))
+    }
     this.write(data)
     return data.entries[idx]
   }
@@ -238,6 +253,34 @@ export class JsonStore implements DataStore {
     if (schema) {
       data.activities.push(makeActivity(schema.projectId, 'row_delete', `Deleted row from "${schema.name}"`))
     }
+    this.write(data)
+  }
+
+  async createEntries(schemaId: string, rows: Record<string, unknown>[], environment: Environment = 'development') {
+    const data = this.read()
+    const now = new Date().toISOString()
+    const entries: DataEntry[] = rows.map(row => ({
+      id: generateId(),
+      schemaId,
+      data: row,
+      environment,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    }))
+    data.entries.push(...entries)
+    const schema = data.schemas.find(s => s.id === schemaId)
+    if (schema) {
+      data.activities.push(makeActivity(schema.projectId, 'row_add', `Added ${rows.length} rows to "${schema.name}"`))
+    }
+    this.write(data)
+    return entries
+  }
+
+  async deleteEntries(ids: string[]) {
+    const data = this.read()
+    const idSet = new Set(ids)
+    data.entries = data.entries.filter(e => !idSet.has(e.id))
     this.write(data)
   }
 
@@ -264,6 +307,9 @@ export class JsonStore implements DataStore {
       rowCount += rows.length
     }
 
+    // Compute table hashes for delta sync
+    const tableHashes = computeTableHashes(snapshot)
+
     // Auto-generate version tag
     const versionTag = nextVersionTag(data.versions, projectId, environment)
 
@@ -281,6 +327,7 @@ export class JsonStore implements DataStore {
       environment,
       status: 'active',
       data: snapshot,
+      tableHashes,
       tableCount: projectSchemas.length,
       rowCount,
       publishedAt: new Date().toISOString(),
@@ -306,13 +353,15 @@ export class JsonStore implements DataStore {
       }
     }
 
+    const promotedData = JSON.parse(JSON.stringify(source.data))
     const version: Version = {
       id: generateId(),
       projectId: source.projectId,
       versionTag,
       environment: targetEnv,
       status: 'active',
-      data: JSON.parse(JSON.stringify(source.data)),
+      data: promotedData,
+      tableHashes: computeTableHashes(promotedData),
       tableCount: source.tableCount,
       rowCount: source.rowCount,
       publishedAt: new Date().toISOString(),
@@ -434,5 +483,37 @@ export class JsonStore implements DataStore {
       .filter(a => a.projectId === projectId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     return limit ? activities.slice(0, limit) : activities
+  }
+
+  // === WEBHOOKS ===
+
+  async listWebhooks(projectId: string) {
+    const data = this.read()
+    if (!data.webhooks) data.webhooks = []
+    return data.webhooks.filter(w => w.projectId === projectId)
+  }
+
+  async createWebhook(projectId: string, url: string, secret: string, events: string[]) {
+    const data = this.read()
+    if (!data.webhooks) data.webhooks = []
+    const webhook: WebhookRegistration = {
+      id: generateId(),
+      projectId,
+      url,
+      secret,
+      events: events as ActivityLog['type'][],
+      active: true,
+      createdAt: new Date().toISOString(),
+    }
+    data.webhooks.push(webhook)
+    this.write(data)
+    return webhook
+  }
+
+  async deleteWebhook(id: string) {
+    const data = this.read()
+    if (!data.webhooks) data.webhooks = []
+    data.webhooks = data.webhooks.filter(w => w.id !== id)
+    this.write(data)
   }
 }

@@ -62,8 +62,8 @@
   --accent: oklch(0.9869 0.0214 95.2774);
   --accent-foreground: oklch(0.4732 0.1247 46.2007);
   --destructive: oklch(0.6368 0.2078 25.3313);
-  --border: oklch(0.9276 0.0058 264.5313);
-  --input: oklch(0.9276 0.0058 264.5313);
+  --border: oklch(0.9400 0.0040 264.53);
+  --input: oklch(0.9400 0.0040 264.53);
   --ring: oklch(0.7686 0.1647 70.0804);
   --chart-1: oklch(0.7686 0.1647 70.0804);
   --chart-2: oklch(0.6658 0.1574 58.3183);
@@ -81,7 +81,13 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+  --topbar-bg: oklch(1.0000 0 0 / 0.80);
+  --sidebar-bg: oklch(0.9846 0.0017 247.84 / 0.75);
+  --shadow-card: 0 0 0 1px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.06), 0 2px 8px oklch(0 0 0 / 0.04);
+  --shadow-card-hover: 0 0 0 1px oklch(0 0 0 / 0.04), 0 2px 6px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.06);
+  --shadow-float: 0 0 0 1px oklch(0 0 0 / 0.05), 0 4px 16px oklch(0 0 0 / 0.10), 0 8px 32px oklch(0 0 0 / 0.06);
+  --shadow-inset-input: inset 0 1px 2px oklch(0 0 0 / 0.06);
 }
 
 .dark {
@@ -116,6 +122,12 @@
   --sidebar-accent-foreground: oklch(0.9243 0.1151 95.7459);
   --sidebar-border: oklch(0.3715 0 0);
   --sidebar-ring: oklch(0.7686 0.1647 70.0804);
+  --topbar-bg: oklch(0.2046 0 0 / 0.80);
+  --sidebar-bg: oklch(0.1684 0 0 / 0.75);
+  --shadow-card: 0 0 0 1px oklch(1 0 0 / 0.06), 0 1px 3px oklch(0 0 0 / 0.20), 0 2px 8px oklch(0 0 0 / 0.15);
+  --shadow-card-hover: 0 0 0 1px oklch(1 0 0 / 0.06), 0 2px 6px oklch(0 0 0 / 0.25), 0 4px 16px oklch(0 0 0 / 0.20);
+  --shadow-float: 0 0 0 1px oklch(1 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.30), 0 8px 32px oklch(0 0 0 / 0.20);
+  --shadow-inset-input: inset 0 1px 2px oklch(0 0 0 / 0.20);
 }
 
 @layer base {
@@ -141,7 +153,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.5 0 0 / 0.15);
+  background: oklch(0.5 0 0 / 0.12);
   border-radius: 3px;
 }
 

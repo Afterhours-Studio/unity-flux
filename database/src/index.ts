@@ -7,6 +7,7 @@ import type { DataStore } from './store/data-store.js'
 import { JsonStore } from './store/json-store.js'
 import { PostgresStore } from './store/postgres-store.js'
 import { createApiRouter } from './api/routes.js'
+import { WebhookDispatcher } from './api/webhook-dispatcher.js'
 import { McpDashboardProxy } from './mcp/proxy.js'
 import { registerProxyTools } from './mcp/register-tools.js'
 import { resolve } from 'node:path'
@@ -26,6 +27,8 @@ if (STORAGE === 'json') {
   console.log(`Storage: PostgreSQL (${DB_URL.replace(/:[^@]*@/, ':***@')})`)
 }
 
+const webhookDispatcher = new WebhookDispatcher(store)
+
 const app = express()
 const httpServer = createServer(app)
 
@@ -36,7 +39,7 @@ app.use(cors({ origin: true }))
 const proxy = new McpDashboardProxy(httpServer)
 
 // ─── REST API (Dashboard → DB) ──────────────────────
-app.use('/api', createApiRouter(store))
+app.use('/api', createApiRouter(store, webhookDispatcher))
 
 app.use('/api', (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('API error:', err.message)

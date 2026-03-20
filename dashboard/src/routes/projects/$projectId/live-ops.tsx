@@ -1,5 +1,6 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus, Trash2, Pencil, Copy, Play, Square, CalendarDays,
   Zap, Trophy, ShoppingBag, Award, Wrench, CalendarCheck, Loader2, Skull,
@@ -31,6 +32,7 @@ import {
   useBattlePassTiers, useCreateBattlePassTier, useUpdateBattlePassTier, useDeleteBattlePassTier,
 } from '@/hooks/use-live-ops'
 import { LIVE_OPS_TEMPLATES, EVENT_TYPE_LABELS, EVENT_TYPE_COLORS } from '@/lib/live-ops-templates'
+import { usePermissions } from '@/hooks/use-permissions'
 
 // FullCalendar
 import FullCalendar from '@fullcalendar/react'
@@ -66,6 +68,7 @@ function CreateEventDialog({
   onOpenChange: (v: boolean) => void
   projectId: string
 }) {
+  const { t } = useTranslation()
   const createMut = useCreateLiveOpsEvent()
   const [step, setStep] = useState<'template' | 'form'>('template')
   const [selectedType, setSelectedType] = useState<LiveOpsEventType>('custom')
@@ -127,9 +130,9 @@ function CreateEventDialog({
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm() }}>
       <DialogContent className="sm:max-w-lg p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>{step === 'template' ? 'Choose Template' : 'Create Event'}</DialogTitle>
+          <DialogTitle>{step === 'template' ? t('liveOps.chooseTemplate') : t('liveOps.createEvent')}</DialogTitle>
           <DialogDescription>
-            {step === 'template' ? 'Select an event type or start from scratch.' : 'Configure your event details.'}
+            {step === 'template' ? t('liveOps.chooseTemplateDesc') : t('liveOps.createEventDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -196,7 +199,7 @@ function CreateEventDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {step === 'form' && (
             <Button onClick={handleCreate} disabled={!name.trim() || createMut.isPending}>
-              {createMut.isPending ? 'Creating...' : 'Create Event'}
+              {createMut.isPending ? t('liveOps.creating') : t('liveOps.createEvent')}
             </Button>
           )}
         </DialogFooter>
@@ -214,6 +217,8 @@ function EventsTab({ projectId, events, onEdit }: {
   events: LiveOpsEvent[]
   onEdit: (e: LiveOpsEvent) => void
 }) {
+  const { t } = useTranslation()
+  const { canEdit, canDelete } = usePermissions()
   const [createOpen, setCreateOpen] = useState(false)
   const updateMut = useUpdateLiveOpsEvent()
   const deleteMut = useDeleteLiveOpsEvent()
@@ -243,12 +248,12 @@ function EventsTab({ projectId, events, onEdit }: {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="scheduled">Scheduled</SelectItem>
-            <SelectItem value="live">Live</SelectItem>
-            <SelectItem value="ended">Ended</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{t('liveOps.allStatuses')}</SelectItem>
+            <SelectItem value="draft">{t('liveOps.status.draft')}</SelectItem>
+            <SelectItem value="scheduled">{t('liveOps.status.scheduled')}</SelectItem>
+            <SelectItem value="live">{t('liveOps.status.live')}</SelectItem>
+            <SelectItem value="ended">{t('liveOps.status.ended')}</SelectItem>
+            <SelectItem value="cancelled">{t('liveOps.status.cancelled')}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -257,7 +262,7 @@ function EventsTab({ projectId, events, onEdit }: {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="all">{t('liveOps.allTypes')}</SelectItem>
             {Object.entries(EVENT_TYPE_LABELS).map(([val, label]) => (
               <SelectItem key={val} value={val}>{label}</SelectItem>
             ))}
@@ -266,22 +271,22 @@ function EventsTab({ projectId, events, onEdit }: {
 
         <div className="flex-1" />
 
-        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+        {canEdit && <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" />
-          New Event
-        </Button>
+          {t('liveOps.newEvent')}
+        </Button>}
       </div>
 
       {filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center py-12">
             <CalendarDays className="h-10 w-10 text-muted-foreground/20 mb-3" />
-            <p className="text-sm font-medium mb-1">No events yet</p>
-            <p className="text-xs text-muted-foreground mb-4">Create your first live ops event</p>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+            <p className="text-sm font-medium mb-1">{t('liveOps.noEvents')}</p>
+            <p className="text-xs text-muted-foreground mb-4">{t('liveOps.noEventsDesc')}</p>
+            {canEdit && <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
-              New Event
-            </Button>
+              {t('liveOps.newEvent')}
+            </Button>}
           </CardContent>
         </Card>
       ) : (
@@ -330,10 +335,10 @@ function EventsTab({ projectId, events, onEdit }: {
                         <Square className="h-[18px] w-[18px]" />
                       </Button>
                     )}
-                    <Button size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => onEdit(event)} title="Edit">
+                    {canEdit && <Button size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => onEdit(event)} title="Edit">
                       <Pencil className="h-[18px] w-[18px]" />
-                    </Button>
-                    <Button
+                    </Button>}
+                    {canDelete && <Button
                       size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-destructive"
                       onClick={async () => {
                         await deleteMut.mutateAsync(event.id)
@@ -342,7 +347,7 @@ function EventsTab({ projectId, events, onEdit }: {
                       title="Delete"
                     >
                       <Trash2 className="h-[18px] w-[18px]" />
-                    </Button>
+                    </Button>}
                   </div>
                 </CardContent>
               </Card>
@@ -361,6 +366,8 @@ function EventsTab({ projectId, events, onEdit }: {
    ═══════════════════════════════════════════════ */
 
 function BattlePassTab({ events }: { events: LiveOpsEvent[] }) {
+  const { t } = useTranslation()
+  const { canEdit, canDelete } = usePermissions()
   const seasonEvents = events.filter((e) => e.type === 'season_pass')
   const [selectedEventId, setSelectedEventId] = useState(seasonEvents[0]?.id ?? '')
   const { data: tiers = [], isLoading } = useBattlePassTiers(selectedEventId)
@@ -373,8 +380,8 @@ function BattlePassTab({ events }: { events: LiveOpsEvent[] }) {
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center py-12">
           <Award className="h-10 w-10 text-muted-foreground/20 mb-3" />
-          <p className="text-sm font-medium mb-1">No Season Pass events</p>
-          <p className="text-xs text-muted-foreground">Create a Season Pass event in the Events tab first.</p>
+          <p className="text-sm font-medium mb-1">{t('liveOps.noSeasonPass')}</p>
+          <p className="text-xs text-muted-foreground">{t('liveOps.noSeasonPassDesc')}</p>
         </CardContent>
       </Card>
     )
@@ -418,10 +425,10 @@ function BattlePassTab({ events }: { events: LiveOpsEvent[] }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">Tier</TableHead>
-                  <TableHead className="w-28">XP Required</TableHead>
-                  <TableHead>Free Reward</TableHead>
-                  <TableHead>Premium Reward</TableHead>
+                  <TableHead className="w-16">{t('liveOps.tier')}</TableHead>
+                  <TableHead className="w-28">{t('liveOps.xpRequired')}</TableHead>
+                  <TableHead>{t('liveOps.freeReward')}</TableHead>
+                  <TableHead>{t('liveOps.premiumReward')}</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
@@ -463,22 +470,22 @@ function BattlePassTab({ events }: { events: LiveOpsEvent[] }) {
                       />
                     </TableCell>
                     <TableCell>
-                      <Button
+                      {canDelete && <Button
                         size="icon" variant="ghost" className="h-7 w-7"
                         onClick={() => deleteTierMut.mutate({ id: t.id, eventId: selectedEventId })}
                       >
                         <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
+                      </Button>}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          <Button variant="outline" size="sm" onClick={handleAddTier}>
+          {canEdit && <Button variant="outline" size="sm" onClick={handleAddTier}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Add Tier
-          </Button>
+            {t('liveOps.addTier')}
+          </Button>}
           {tiers.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {tiers.length} tiers - Total XP: {tiers.reduce((s, t) => s + t.xpRequired, 0).toLocaleString()}
@@ -664,6 +671,7 @@ function EditEventDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
+  const { t } = useTranslation()
   const updateMut = useUpdateLiveOpsEvent()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -712,7 +720,7 @@ function EditEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Edit Event</DialogTitle>
+          <DialogTitle>{t('liveOps.editEvent')}</DialogTitle>
           <DialogDescription>
             {EVENT_TYPE_LABELS[event.type]} - {event.id.slice(0, 8)}
           </DialogDescription>
@@ -731,11 +739,11 @@ function EditEventDialog({
             <Select value={status} onValueChange={(v) => setStatus(v as LiveOpsStatus)}>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="live">Live</SelectItem>
-                <SelectItem value="ended">Ended</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="draft">{t('liveOps.status.draft')}</SelectItem>
+                <SelectItem value="scheduled">{t('liveOps.status.scheduled')}</SelectItem>
+                <SelectItem value="live">{t('liveOps.status.live')}</SelectItem>
+                <SelectItem value="ended">{t('liveOps.status.ended')}</SelectItem>
+                <SelectItem value="cancelled">{t('liveOps.status.cancelled')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -760,7 +768,7 @@ function EditEventDialog({
         <DialogFooter className="px-6 pb-6 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={updateMut.isPending}>
-            {updateMut.isPending ? 'Saving...' : 'Save Changes'}
+            {updateMut.isPending ? t('liveOps.saving') : t('liveOps.saveChanges')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -773,6 +781,7 @@ function EditEventDialog({
    ═══════════════════════════════════════════════ */
 
 function LiveOpsPage() {
+  const { t } = useTranslation()
   const { projectId } = useParams({ from: '/projects/$projectId/live-ops' })
   const { data: events = [], isLoading } = useLiveOpsEvents(projectId)
   const [tab, setTab] = useState<'events' | 'battlepass' | 'calendar'>('events')
@@ -790,9 +799,9 @@ function LiveOpsPage() {
     <PageTransition className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Live Ops</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('liveOps.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule events, manage battle passes, and view your live ops calendar.
+            {t('liveOps.description')}
           </p>
         </div>
       </div>
@@ -800,9 +809,9 @@ function LiveOpsPage() {
       {/* Tab switcher */}
       <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
         {[
-          { key: 'events' as const, label: 'Events', icon: Zap },
-          { key: 'battlepass' as const, label: 'Battle Pass', icon: Award },
-          { key: 'calendar' as const, label: 'Calendar', icon: CalendarDays },
+          { key: 'events' as const, label: t('liveOps.tab.events'), icon: Zap },
+          { key: 'battlepass' as const, label: t('liveOps.tab.battlePass'), icon: Award },
+          { key: 'calendar' as const, label: t('liveOps.tab.calendar'), icon: CalendarDays },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}

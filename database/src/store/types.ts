@@ -37,14 +37,25 @@ export interface Version {
   environment: Environment
   status: 'active' | 'superseded' | 'rolled_back'
   data: Record<string, Record<string, unknown>[]>
+  tableHashes: Record<string, string>
   tableCount: number; rowCount: number; publishedAt: string
 }
 
 export interface ActivityLog {
   id: string; projectId: string
-  type: 'publish' | 'promote' | 'rollback' | 'table_create' | 'table_delete' | 'table_update' | 'row_add' | 'row_delete' | 'event_create' | 'event_update' | 'event_delete'
+  type: 'publish' | 'promote' | 'rollback' | 'table_create' | 'table_delete' | 'table_update' | 'row_add' | 'row_update' | 'row_delete' | 'event_create' | 'event_update' | 'event_delete'
   message: string
   meta?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface WebhookRegistration {
+  id: string
+  projectId: string
+  url: string
+  secret: string
+  events: ActivityLog['type'][]
+  active: boolean
   createdAt: string
 }
 
@@ -69,4 +80,5 @@ export interface StoreData {
   entries: DataEntry[]
   versions: Version[]
   activities: ActivityLog[]
+  webhooks: WebhookRegistration[]
 }

@@ -1,5 +1,6 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
 import {
   Tag,
   Clock,
@@ -46,6 +47,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { usePermissions } from '@/hooks/use-permissions'
 import {
   Tooltip,
   TooltipContent,
@@ -118,6 +120,7 @@ function VersionDetailDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const tableNames = Object.keys(version.data)
   const [activeTab, setActiveTab] = useState(tableNames[0] ?? '')
   const [search, setSearch] = useState('')
@@ -136,7 +139,7 @@ function VersionDetailDialog({
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(version.data, null, 2))
-    toast.success('Copied JSON to clipboard')
+    toast.success(t('versions.copiedJson'))
   }
 
   return (
@@ -279,7 +282,7 @@ function VersionDetailDialog({
             <div className="px-6 pb-4 pt-4 border-t shrink-0 flex justify-end bg-background">
               <Button variant="outline" size="sm" onClick={handleCopyJson}>
                 <Copy className="h-3.5 w-3.5 mr-2" />
-                Copy as JSON
+                {t('versions.copyJson')}
               </Button>
             </div>
           </div>
@@ -305,6 +308,7 @@ function PromoteDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const promoteVersionMut = usePromoteVersion()
   const targets = ENV_LIST.filter((e) => e !== version.environment)
   const [targetEnv, setTargetEnv] = useState<Version['environment']>(
@@ -319,10 +323,10 @@ function PromoteDialog({
   const handlePromote = async () => {
     try {
       const v = await promoteVersionMut.mutateAsync({ versionId: version.id, targetEnv })
-      toast.success(`Promoted to ${targetEnv} as ${v.versionTag}`)
+      toast.success(t('versions.promoted', { env: targetEnv, tag: v.versionTag }))
       onOpenChange(false)
     } catch {
-      toast.error('Failed to promote version')
+      toast.error(t('versions.promoteFailed'))
     }
   }
 
@@ -330,9 +334,9 @@ function PromoteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-[480px] sm:w-[480px] h-[450px] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Promote {version.versionTag}</DialogTitle>
+          <DialogTitle>{t('versions.promoteVersion', { tag: version.versionTag })}</DialogTitle>
           <DialogDescription>
-            Deploy this version's data to another environment.
+            {t('versions.promoteDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-4 space-y-3 flex-1 overflow-y-auto">
@@ -385,22 +389,21 @@ function PromoteDialog({
             <div className="flex gap-2 items-start bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <p>
-                Promoting to production will immediately update the live
-                configuration for all players.
+                {t('versions.productionWarning')}
               </p>
             </div>
           )}
         </div>
         <DialogFooter className="px-6 pb-6 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant={targetEnv === 'production' ? 'destructive' : 'default'}
             onClick={handlePromote}
           >
             <ArrowUpRight className="h-4 w-4 mr-2" />
-            Promote to {targetEnv}
+            {t('versions.promoteTo', { env: targetEnv })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -423,15 +426,16 @@ function RollbackDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const rollbackVersionMut = useRollbackVersion()
 
   const handleRollback = async () => {
     try {
       await rollbackVersionMut.mutateAsync(version.id)
-      toast.success(`Rolled back to ${version.versionTag}`)
+      toast.success(t('versions.rolledBack', { tag: version.versionTag }))
       onOpenChange(false)
     } catch {
-      toast.error('Failed to rollback version')
+      toast.error(t('versions.rollbackFailed'))
     }
   }
 
@@ -439,13 +443,9 @@ function RollbackDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-[480px] sm:w-[480px] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Rollback to {version.versionTag}?</DialogTitle>
+          <DialogTitle>{t('versions.rollbackTo', { tag: version.versionTag })}</DialogTitle>
           <DialogDescription>
-            This will restore {version.versionTag} as the active version for{' '}
-            <span className="font-medium text-foreground capitalize">
-              {version.environment}
-            </span>
-            .
+            <Trans i18nKey="versions.rollbackDescription" values={{ tag: version.versionTag, env: version.environment }} components={{ strong: <strong className="font-semibold text-foreground" /> }} />
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-4 space-y-3 text-sm">
@@ -481,11 +481,11 @@ function RollbackDialog({
         </div>
         <DialogFooter className="px-6 pb-6 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleRollback}>
             <RotateCcw className="h-4 w-4 mr-2" />
-            Rollback
+            {t('versions.rollback')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -506,15 +506,16 @@ function DeleteVersionDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const deleteVersionMut = useDeleteVersion()
 
   const handleDelete = async () => {
     try {
       await deleteVersionMut.mutateAsync(version.id)
-      toast.success(`Deleted ${version.versionTag}`)
+      toast.success(t('versions.deleted', { tag: version.versionTag }))
       onOpenChange(false)
     } catch {
-      toast.error('Failed to delete version')
+      toast.error(t('versions.deleteFailed'))
     }
   }
 
@@ -522,22 +523,18 @@ function DeleteVersionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-[480px] sm:w-[480px] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Delete Version</DialogTitle>
+          <DialogTitle>{t('versions.deleteVersion')}</DialogTitle>
           <DialogDescription>
-            Permanently delete{' '}
-            <span className="font-mono font-medium text-foreground">
-              {version.versionTag}
-            </span>{' '}
-            ({version.environment}). This cannot be undone.
+            <Trans i18nKey="versions.deleteDescription" values={{ tag: version.versionTag, env: version.environment }} components={{ strong: <strong className="font-semibold text-foreground" /> }} />
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="px-6 pb-6 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="h-4 w-4 mr-2" />
-            Delete
+            {t('common.delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -573,6 +570,7 @@ function CompareDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const [v1Id, setV1Id] = useState(preselectedId ?? '')
   const [v2Id, setV2Id] = useState('')
   const { data: diff = null, isLoading: isComparing } = useCompareVersions(v1Id, v2Id)
@@ -590,18 +588,18 @@ function CompareDialog({
     >
       <DialogContent className="w-[95vw] sm:max-w-[900px] sm:w-[900px] h-[85vh] sm:h-[700px] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle>Compare Versions</DialogTitle>
+          <DialogTitle>{t('versions.compareVersions')}</DialogTitle>
           <DialogDescription>
-            Select two versions to see what changed.
+            {t('versions.compareDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-6 pt-4 flex items-end gap-3 shrink-0">
           <div className="flex-1 space-y-1">
-            <label className="text-xs text-muted-foreground">Base</label>
+            <label className="text-xs text-muted-foreground">{t('versions.base')}</label>
             <Select value={v1Id} onValueChange={setV1Id}>
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Select version…" />
+                <SelectValue placeholder={t('versions.selectVersion')} />
               </SelectTrigger>
               <SelectContent>
                 {allVersions.map((v) => (
@@ -622,10 +620,10 @@ function CompareDialog({
           </div>
           <span className="text-muted-foreground text-sm pb-2">vs</span>
           <div className="flex-1 space-y-1">
-            <label className="text-xs text-muted-foreground">Compare</label>
+            <label className="text-xs text-muted-foreground">{t('versions.compareTo')}</label>
             <Select value={v2Id} onValueChange={setV2Id}>
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Select version…" />
+                <SelectValue placeholder={t('versions.selectVersion')} />
               </SelectTrigger>
               <SelectContent>
                 {allVersions
@@ -651,7 +649,7 @@ function CompareDialog({
             disabled={!v1Id || !v2Id || isComparing}
             className="mb-0"
           >
-            {isComparing ? 'Comparing…' : 'Compare'}
+            {isComparing ? t('versions.comparing') : t('versions.compare')}
           </Button>
         </div>
 
@@ -810,22 +808,20 @@ function CompareDialog({
                   )
                 })}
 
-              {diff.tableDiffs.every((t) => t.status === 'unchanged') && (
+              {diff.tableDiffs.every((td) => td.status === 'unchanged') && (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No differences found between{' '}
-                  <span className="font-mono">{v1?.versionTag}</span> and{' '}
-                  <span className="font-mono">{v2?.versionTag}</span>.
+                  {t('versions.noDifferences', { v1: v1?.versionTag, v2: v2?.versionTag })}
                 </p>
               )}
             </>
           ) : isComparing ? (
             <div className="flex items-center justify-center py-8">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
-              <p className="text-sm text-muted-foreground">Comparing versions…</p>
+              <p className="text-sm text-muted-foreground">{t('versions.comparing')}</p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
-              Select two versions and click Compare to see the diff.
+              {t('versions.selectVersions')}
             </p>
           )}
         </div>
@@ -839,6 +835,7 @@ function CompareDialog({
    ═══════════════════════════════════════════════ */
 
 function VersionsPage() {
+  const { t } = useTranslation()
   const { projectId } = useParams({ from: '/projects/$projectId/versions' })
   const { data: versions = [] } = useVersions(projectId)
 
@@ -856,6 +853,8 @@ function VersionsPage() {
     [versions, filterEnv, filterStatus],
   )
 
+  const { canPublish, canEdit } = usePermissions()
+
   // Dialog state
   const [publishOpen, setPublishOpen] = useState(false)
   const [viewVersion, setViewVersion] = useState<Version | null>(null)
@@ -868,9 +867,9 @@ function VersionsPage() {
   const handlePublish = async (env: 'development' | 'staging' | 'production') => {
     try {
       const version = await publishVersionMut.mutateAsync({ projectId, environment: env })
-      toast.success(`Published ${version.versionTag} to ${env}`)
+      toast.success(t('versions.published', { tag: version.versionTag, env }))
     } catch (err) {
-      toast.error(`Failed to publish: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast.error(t('versions.publishFailed', { error: err instanceof Error ? err.message : 'Unknown error' }))
     }
   }
 
@@ -890,10 +889,10 @@ function VersionsPage() {
       <PageTransition className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Version Manager
+            {t('versions.title')}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Publish, compare, and manage configuration versions.
+            {t('versions.description')}
           </p>
         </div>
         <Card className="border-dashed">
@@ -907,24 +906,23 @@ function VersionsPage() {
               <Tag className="h-8 w-8 text-primary" />
             </motion.div>
             <h3 className="text-lg font-semibold mb-2">
-              No versions published
+              {t('versions.noVersions')}
             </h3>
             <p className="text-muted-foreground text-sm text-center max-w-md">
-              Go to the Data tab, add some configuration tables, then click
-              Publish to create your first version snapshot.
+              {t('versions.noVersionsDescription')}
             </p>
             <div className="flex gap-6 mt-8 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                Immutable snapshots
+                {t('versions.immutableSnapshots')}
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
-                Version history
+                {t('versions.versionHistory')}
               </div>
               <div className="flex items-center gap-2">
                 <XCircle className="h-4 w-4 text-primary" />
-                One-click rollback
+                {t('versions.oneClickRollback')}
               </div>
             </div>
           </CardContent>
@@ -938,15 +936,15 @@ function VersionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Version Manager</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('versions.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Publish, compare, and manage configuration versions.
+            {t('versions.description')}
           </p>
         </div>
-        <Button size="sm" onClick={() => setPublishOpen(true)}>
+        {canPublish && <Button size="sm" onClick={() => setPublishOpen(true)}>
           <Rocket className="h-3.5 w-3.5 mr-1.5" />
-          Publish
-        </Button>
+          {t('versions.publish')}
+        </Button>}
       </div>
 
       {/* Environment overview cards */}
@@ -988,7 +986,7 @@ function VersionsPage() {
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      No active version
+                      {t('environments.noActiveVersion')}
                     </p>
                   )}
                 </CardContent>
@@ -1005,7 +1003,7 @@ function VersionsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All environments</SelectItem>
+            <SelectItem value="all">{t('environments.allEnvironments')}</SelectItem>
             {ENV_LIST.map((e) => (
               <SelectItem key={e} value={e} className="capitalize">
                 {e}
@@ -1019,7 +1017,7 @@ function VersionsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="all">{t('status.allStatuses')}</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="superseded">Superseded</SelectItem>
             <SelectItem value="rolled_back">Rolled back</SelectItem>
@@ -1034,7 +1032,7 @@ function VersionsPage() {
           onClick={() => setCompareOpen(true)}
         >
           <GitCompareArrows className="h-4 w-4 mr-2" />
-          Compare
+          {t('versions.compare')}
         </Button>
       </div>
 
@@ -1124,7 +1122,7 @@ function VersionsPage() {
                               <Eye className="h-[18px] w-[18px]" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>View data</TooltipContent>
+                          <TooltipContent>{t('versions.viewData')}</TooltipContent>
                         </Tooltip>
 
                         <Tooltip>
@@ -1137,13 +1135,13 @@ function VersionsPage() {
                                 navigator.clipboard.writeText(
                                   JSON.stringify(version.data, null, 2),
                                 )
-                                toast.success('Copied JSON to clipboard')
+                                toast.success(t('versions.copiedJson'))
                               }}
                             >
                               <Copy className="h-[18px] w-[18px]" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Copy as JSON</TooltipContent>
+                          <TooltipContent>{t('versions.copyJson')}</TooltipContent>
                         </Tooltip>
 
                         {version.r2Url && (
@@ -1160,11 +1158,11 @@ function VersionsPage() {
                                 </a>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View on CDN</TooltipContent>
+                            <TooltipContent>{t('versions.viewOnCdn')}</TooltipContent>
                           </Tooltip>
                         )}
 
-                        {version.status === 'active' && (
+                        {version.status === 'active' && canPublish && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -1176,11 +1174,11 @@ function VersionsPage() {
                                 <ArrowUpRight className="h-[18px] w-[18px]" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Promote to…</TooltipContent>
+                            <TooltipContent>{t('versions.promoteToTarget')}</TooltipContent>
                           </Tooltip>
                         )}
 
-                        {version.status !== 'active' && (
+                        {version.status !== 'active' && canPublish && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -1192,7 +1190,7 @@ function VersionsPage() {
                                 <RotateCcw className="h-[18px] w-[18px]" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Rollback to this</TooltipContent>
+                            <TooltipContent>{t('versions.rollbackToThis')}</TooltipContent>
                           </Tooltip>
                         )}
 
@@ -1208,7 +1206,7 @@ function VersionsPage() {
                                 <Trash2 className="h-[18px] w-[18px]" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Delete</TooltipContent>
+                            <TooltipContent>{t('common.delete')}</TooltipContent>
                           </Tooltip>
                         )}
                       </div>
@@ -1295,18 +1293,19 @@ function PublishDialog({
   onOpenChange: (open: boolean) => void
   onPublish: (env: 'development' | 'staging' | 'production') => void
 }) {
+  const { t } = useTranslation()
   const [env, setEnv] = useState<'development' | 'staging' | 'production'>('staging')
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Publish Version</DialogTitle>
+          <DialogTitle>{t('versions.publishVersion')}</DialogTitle>
           <DialogDescription>
-            Snapshot all blueprints and formulas, then deploy to an environment.
+            {t('versions.publishDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 px-6 py-4">
-          <Label>Target Environment</Label>
+          <Label>{t('versions.targetEnvironment')}</Label>
           <div className="space-y-2">
             {ENV_OPTIONS.map((opt) => (
               <button
@@ -1337,18 +1336,18 @@ function PublishDialog({
           {env === 'production' && (
             <div className="flex gap-2 items-start bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <p>Publishing to production will immediately update the live configuration for all players.</p>
+              <p>{t('versions.publishProductionWarning')}</p>
             </div>
           )}
         </div>
         <DialogFooter className="px-6 pb-6 pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button
             variant={env === 'production' ? 'destructive' : 'default'}
             onClick={() => { onPublish(env); onOpenChange(false) }}
           >
             <Rocket className="h-4 w-4 mr-2" />
-            Publish to {env}
+            {t('versions.publishTo', { env })}
           </Button>
         </DialogFooter>
       </DialogContent>

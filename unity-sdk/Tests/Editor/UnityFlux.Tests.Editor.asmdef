@@ -1,0 +1,25 @@
+{
+    "name": "UnityFlux.Tests.Editor",
+    "rootNamespace": "UnityFlux.Tests.Editor",
+    "references": [
+        "UnityFlux.Runtime",
+        "UnityFlux.Editor",
+        "Newtonsoft.Json"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

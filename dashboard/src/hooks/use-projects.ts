@@ -34,9 +34,20 @@ export function useCreateProject() {
 export function useUpdateProject() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Pick<Project, 'name' | 'description' | 'supabaseUrl' | 'r2BucketUrl' | 'environment'>> }) =>
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Pick<Project, 'name' | 'description' | 'supabaseUrl' | 'r2BucketUrl' | 'environment' | 'dataSource'>> }) =>
       db.updateProject(id, updates),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id, updates }) => {
+      await qc.cancelQueries({ queryKey: projectKeys.detail(id) })
+      const prev = qc.getQueryData<Project | null>(projectKeys.detail(id))
+      if (prev) {
+        qc.setQueryData(projectKeys.detail(id), { ...prev, ...updates })
+      }
+      return { prev }
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prev) qc.setQueryData(projectKeys.detail(id), ctx.prev)
+    },
+    onSettled: (_, _err, { id }) => {
       qc.invalidateQueries({ queryKey: projectKeys.all })
       qc.invalidateQueries({ queryKey: projectKeys.detail(id) })
     },

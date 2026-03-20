@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { LogOut, Sun, Moon, Bell, User, Shield, Camera, Smile, Check, X, Eye, EyeOff, Pencil } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { LogOut, Sun, Moon, Bell, User, Shield, Camera, Smile, Check, X, Eye, EyeOff, Pencil, Search, Languages } from 'lucide-react'
+import { motion } from '@/components/motion'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,18 +23,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+import { listRecentActivity } from '@/lib/supabase-data'
 import { useAuthStore } from '@/stores/auth-store'
+import { usePermissions } from '@/hooks/use-permissions'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { useThemeStore } from '@/stores/theme-store'
+import { SearchDialog } from '@/components/search-dialog'
+import { useTranslation } from 'react-i18next'
+import { LANGUAGES, changeLanguage } from '@/lib/i18n'
 
 export function TopBar() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
+  const { t, i18n } = useTranslation()
   const [profileOpen, setProfileOpen] = useState(false)
   const isAdmin = useAuthStore((s) => s.isAdmin)
+  const { isViewer } = usePermissions()
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -60,14 +82,39 @@ export function TopBar() {
 
   return (
     <>
-      <header className="flex h-14 items-center justify-between border-b border-border bg-background px-5 shrink-0">
+      <header className="flex h-14 items-center justify-between border-b border-border/50 bg-[var(--topbar-bg)] backdrop-blur-xl backdrop-saturate-150 px-5 shrink-0">
         {/* Brand */}
         <Link to="/" className="flex items-center gap-2.5 group">
           <img src="/flux-icon.png" alt="Flux" className="h-8 w-8 rounded-lg shadow-sm transition-all duration-200 group-hover:shadow-md group-hover:scale-105" />
           <span className="text-sm font-semibold tracking-tight">
             Unity Flux
           </span>
+          {isViewer && <Badge variant="secondary" className="text-[10px] ml-2">Read-only</Badge>}
         </Link>
+
+        {/* Search */}
+        {!searchOpen ? (
+          <motion.button
+            layoutId="search-box"
+            onClick={() => setSearchOpen(true)}
+            style={{ borderRadius: 12 }}
+            transition={{ layout: { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] } }}
+            className="overflow-hidden h-8 w-80 lg:w-96 px-3 border border-border/60 bg-muted/50 text-muted-foreground text-sm shadow-xs hover:shadow-sm transition-shadow transition-colors"
+          >
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.15, duration: 0.12 }}
+              className="flex items-center gap-2 w-full"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Search...</span>
+              <kbd className="inline-flex h-5 items-center rounded border bg-muted px-1.5 text-[10px] font-mono shrink-0">{navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}K</kbd>
+            </motion.span>
+          </motion.button>
+        ) : (
+          <div className="h-8 w-80 lg:w-96" aria-hidden />
+        )}
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
@@ -82,27 +129,8 @@ export function TopBar() {
             </Link>
           )}
 
-          {/* Notifications */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <Bell className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="flex flex-col items-center justify-center py-8 px-4">
-                <Bell className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  No notifications yet
-                </p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  Publish events and updates will appear here.
-                </p>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Notifications / Activity */}
+          <ActivityDropdown />
 
           {/* User Menu */}
           <DropdownMenu>
@@ -153,6 +181,22 @@ export function TopBar() {
                   />
                 </div>
               </button>
+              <button
+                onClick={() => {
+                  const currentIdx = LANGUAGES.findIndex(l => l.code === i18n.language)
+                  const nextIdx = (currentIdx + 1) % LANGUAGES.length
+                  changeLanguage(LANGUAGES[nextIdx].code)
+                }}
+                className="flex items-center justify-between w-full px-2 py-1.5 rounded-sm hover:bg-accent transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Languages className="h-4 w-4" />
+                  <span className="text-sm">Language</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {LANGUAGES.find(l => l.code === i18n.language)?.label || 'English'}
+                </span>
+              </button>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
@@ -177,8 +221,109 @@ export function TopBar() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   )
+}
+
+// ─── Activity Dropdown ────────────────────────────────
+
+function ActivityDropdown() {
+  const { data: activities = [] } = useQuery({
+    queryKey: ['activity', 'recent'],
+    queryFn: () => listRecentActivity(20),
+    refetchInterval: 30000,
+  })
+
+  const [lastSeen, setLastSeen] = useState(() =>
+    localStorage.getItem('flux-notifications-seen') || '',
+  )
+
+  const unreadCount = lastSeen
+    ? activities.filter((a) => new Date(a.createdAt) > new Date(lastSeen)).length
+    : activities.length
+
+  const markSeen = () => {
+    const now = new Date().toISOString()
+    localStorage.setItem('flux-notifications-seen', now)
+    setLastSeen(now)
+  }
+
+  return (
+    <DropdownMenu onOpenChange={(open) => { if (open) markSeen() }}>
+      <DropdownMenuTrigger asChild>
+        <button className="relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel>Activity</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {activities.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 px-4">
+            <Bell className="h-8 w-8 text-muted-foreground/20 mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Publish events and updates will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="max-h-[360px] overflow-y-auto">
+            {activities.map((a) => {
+              const isUnread = lastSeen
+                ? new Date(a.createdAt) > new Date(lastSeen)
+                : true
+              return (
+                <div
+                  key={a.id}
+                  className={cn(
+                    'px-3 py-2.5 border-b last:border-b-0 text-sm',
+                    isUnread && 'bg-primary/5',
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {isUnread && (
+                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm leading-snug">{a.message}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {a.projectName && (
+                          <span className="text-[11px] text-muted-foreground font-medium">
+                            {a.projectName}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatTimeAgo(a.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
 // ─── Profile Content ──────────────────────────────────

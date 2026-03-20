@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import { Plus, Calendar, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/')({
 function ProjectListPage() {
   const { data: projects = [], isLoading } = useProjects()
   const [createOpen, setCreateOpen] = useState(false)
+  const { t } = useTranslation()
 
   if (isLoading) {
     return (
@@ -29,14 +31,14 @@ function ProjectListPage() {
     <PageTransition className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t('projects.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your game configurations across multiple titles.
+            {t('projects.manageDescription')}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          New Project
+          {t('projects.newProject')}
         </Button>
       </div>
 
@@ -51,14 +53,13 @@ function ProjectListPage() {
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
                 <Gamepad2 className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('projects.noProjects')}</h3>
               <p className="text-muted-foreground text-sm mb-6 text-center max-w-sm">
-                Create your first project to start managing game configurations
-                with over-the-air updates.
+                {t('projects.noProjectsDescription')}
               </p>
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Project
+                {t('projects.createProject')}
               </Button>
             </CardContent>
           </Card>

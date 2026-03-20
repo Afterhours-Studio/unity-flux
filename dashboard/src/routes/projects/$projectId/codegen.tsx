@@ -1,5 +1,6 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQueries } from '@tanstack/react-query'
 import { Copy, Download, Code, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -127,6 +128,7 @@ function highlightCSharp(code: string): string {
 /* ═══════════════════════════════════════════════ */
 
 function CodegenPage() {
+  const { t } = useTranslation()
   const { projectId } = useParams({ from: '/projects/$projectId/codegen' })
 
   const { data: project } = useProject(projectId)
@@ -229,9 +231,9 @@ function CodegenPage() {
       <div className="flex items-center justify-between px-6 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
         <div className="flex items-center gap-2">
           <Code className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">C# Code Generation</h2>
+          <h2 className="text-sm font-medium">{t('codegen.title')}</h2>
           <span className="text-xs text-muted-foreground">
-            {selectedIds.size} of {schemas.length} schemas selected
+            {t('codegen.schemasSelected', { count: selectedIds.size, total: schemas.length })}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -247,7 +249,7 @@ function CodegenPage() {
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
-            {copied ? 'Copied' : 'Copy All'}
+            {copied ? t('codegen.copied') : t('codegen.copyCode')}
           </Button>
           <Button
             variant="outline"
@@ -257,7 +259,7 @@ function CodegenPage() {
             disabled={schemas.length === 0}
           >
             <Download className="h-3.5 w-3.5" />
-            Download .cs
+            {t('codegen.downloadFile')}
           </Button>
         </div>
       </div>
@@ -268,7 +270,7 @@ function CodegenPage() {
         <div className="w-64 border-r bg-muted/30 p-4 flex flex-col gap-4 overflow-y-auto shrink-0">
           {/* Namespace input */}
           <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Namespace</Label>
+            <Label className="text-xs text-muted-foreground">{t('codegen.namespace')}</Label>
             <Input
               value={namespace}
               onChange={(e) => setNamespace(e.target.value)}
@@ -280,19 +282,19 @@ function CodegenPage() {
           {/* Schema list */}
           <div className="grid gap-1">
             <div className="flex items-center justify-between mb-1">
-              <Label className="text-xs text-muted-foreground">Schemas</Label>
+              <Label className="text-xs text-muted-foreground">{t('codegen.schemas')}</Label>
               <button
                 type="button"
                 onClick={toggleAll}
                 className="text-[11px] text-primary hover:underline"
               >
-                {selectedIds.size === schemas.length ? 'Deselect all' : 'Select all'}
+                {selectedIds.size === schemas.length ? t('codegen.deselectAll') : t('codegen.selectAll')}
               </button>
             </div>
 
             {schemas.length === 0 ? (
               <p className="text-xs text-muted-foreground py-6 text-center">
-                No schemas defined yet. Create schemas in the Data tab to generate C# classes.
+                {t('codegen.noSchemas')}
               </p>
             ) : (
               <div className="space-y-0.5">

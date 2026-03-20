@@ -1,5 +1,6 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useState, useMemo, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus, Trash2, Pencil, FunctionSquare, Loader2, AlertTriangle, X,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ import type { Formula, FormulaVariable } from '@/types/project'
 import {
   useFormulas, useCreateFormula, useUpdateFormula, useDeleteFormula,
 } from '@/hooks/use-formulas'
+import { usePermissions } from '@/hooks/use-permissions'
 
 export const Route = createFileRoute('/projects/$projectId/formulas')({
   component: FormulasPage,
@@ -96,10 +98,12 @@ function PreviewTable({
     })
   }, [expression, variables, previewInputs])
 
+  const { t } = useTranslation()
+
   if (variables.length === 0) {
     return (
       <p className="text-xs text-muted-foreground py-4 text-center">
-        Add variables to see preview.
+        {t('formulas.addVariablesToPreview')}
       </p>
     )
   }
@@ -107,7 +111,7 @@ function PreviewTable({
   if (!expression.trim()) {
     return (
       <p className="text-xs text-muted-foreground py-4 text-center">
-        Write an expression to see preview.
+        {t('formulas.writeExpressionToPreview')}
       </p>
     )
   }
@@ -120,7 +124,7 @@ function PreviewTable({
             {variables.map((v) => (
               <TableHead key={v.name} className="text-xs font-mono">{v.name}</TableHead>
             ))}
-            <TableHead className="text-xs font-mono font-bold">Result</TableHead>
+            <TableHead className="text-xs font-mono font-bold">{t('formulas.result')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -177,13 +181,15 @@ function VariableEditor({
     }
   }
 
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs font-medium">Variables</Label>
+        <Label className="text-xs font-medium">{t('formulas.variables')}</Label>
         <Button variant="ghost" size="sm" onClick={addVariable} className="h-6 text-xs">
           <Plus className="h-3 w-3 mr-1" />
-          Add
+          {t('common.add')}
         </Button>
       </div>
       {variables.map((v, i) => (
@@ -224,7 +230,7 @@ function VariableEditor({
         </div>
       ))}
       {variables.length === 0 && (
-        <p className="text-xs text-muted-foreground text-center py-2">No variables defined.</p>
+        <p className="text-xs text-muted-foreground text-center py-2">{t('formulas.noVariables')}</p>
       )}
     </div>
   )
@@ -393,6 +399,7 @@ function ExpressionEditor({
   onAddVariable: (name: string) => void
   error: string | null
 }) {
+  const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const variableNames = useMemo(() => new Set(variables.map((v) => v.name)), [variables])
 
@@ -425,7 +432,7 @@ function ExpressionEditor({
   return (
     <div className="grid gap-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-xs">Expression</Label>
+        <Label className="text-xs">{t('formulas.expression')}</Label>
         {error && (
           <span className="flex items-center gap-1 text-[11px] text-red-500">
             <AlertTriangle className="h-3 w-3" />
@@ -497,6 +504,7 @@ function FormulaDialog({
   projectId: string
   formula: Formula | null // null = create mode
 }) {
+  const { t } = useTranslation()
   const createMut = useCreateFormula()
   const updateMut = useUpdateFormula()
   const isEdit = !!formula
@@ -586,14 +594,14 @@ function FormulaDialog({
       <DialogContent className="sm:max-w-[960px] p-0 max-h-[90vh] flex flex-col">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle>
-            {isEdit ? 'Edit Formula' : step === 'template' ? 'Choose Template' : 'New Formula'}
+            {isEdit ? t('formulas.editFormula') : step === 'template' ? t('formulas.chooseTemplate') : t('formulas.newFormula')}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Editing ${formula.name}`
+              ? t('formulas.editingFormula', { name: formula.name })
               : step === 'template'
-                ? 'Pick a template or start from scratch.'
-                : 'Configure your formula details.'}
+                ? t('formulas.chooseTemplateDesc')
+                : t('formulas.newFormulaDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -614,8 +622,8 @@ function FormulaDialog({
               onClick={() => setStep('form')}
               className="flex flex-col gap-1 p-3 border rounded-lg text-left hover:bg-accent/50 transition-colors border-dashed"
             >
-              <p className="text-sm font-medium">Blank Formula</p>
-              <p className="text-[11px] text-muted-foreground">Start from scratch</p>
+              <p className="text-sm font-medium">{t('formulas.blankFormula')}</p>
+              <p className="text-[11px] text-muted-foreground">{t('formulas.startFromScratch')}</p>
             </button>
           </div>
         ) : (
@@ -657,7 +665,7 @@ function FormulaDialog({
             />
 
             <div className="grid gap-1.5">
-              <Label className="text-xs">Preview</Label>
+              <Label className="text-xs">{t('formulas.preview')}</Label>
               <PreviewTable expression={expression} variables={variables} previewInputs={previewInputs} />
             </div>
           </div>
@@ -670,7 +678,7 @@ function FormulaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {(isEdit || step === 'form') && (
             <Button onClick={handleSave} disabled={!name.trim() || !expression.trim() || isPending}>
-              {isPending ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Formula'}
+              {isPending ? t('formulas.saving') : isEdit ? t('formulas.saveChanges') : t('formulas.createFormula')}
             </Button>
           )}
         </DialogFooter>
@@ -684,8 +692,10 @@ function FormulaDialog({
    ═══════════════════════════════════════════════ */
 
 function FormulasPage() {
+  const { t } = useTranslation()
   const { projectId } = useParams({ from: '/projects/$projectId/formulas' })
   const { data: formulas = [], isLoading } = useFormulas(projectId)
+  const { canEdit, canDelete } = usePermissions()
   const deleteMut = useDeleteFormula()
   const [createOpen, setCreateOpen] = useState(false)
   const [editFormula, setEditFormula] = useState<Formula | null>(null)
@@ -707,9 +717,9 @@ function FormulasPage() {
   return (
     <PageTransition className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Formulas</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('formulas.title')}</h1>
         <p className="text-sm text-muted-foreground">
-          Define reusable math and logic expressions for your game.
+          {t('formulas.description')}
         </p>
       </div>
 
@@ -720,30 +730,30 @@ function FormulasPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All modes</SelectItem>
-            <SelectItem value="method">C# Method</SelectItem>
-            <SelectItem value="lookup">Lookup Table</SelectItem>
+            <SelectItem value="all">{t('formulas.allModes')}</SelectItem>
+            <SelectItem value="method">{t('formulas.csharpMethod')}</SelectItem>
+            <SelectItem value="lookup">{t('formulas.lookupTable')}</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="flex-1" />
 
-        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+        {canEdit && <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" />
-          New Formula
-        </Button>
+          {t('formulas.newFormula')}
+        </Button>}
       </div>
 
       {filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center py-12">
             <FunctionSquare className="h-10 w-10 text-muted-foreground/20 mb-3" />
-            <p className="text-sm font-medium mb-1">No formulas yet</p>
-            <p className="text-xs text-muted-foreground mb-4">Create your first formula to define game calculations</p>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+            <p className="text-sm font-medium mb-1">{t('formulas.noFormulas')}</p>
+            <p className="text-xs text-muted-foreground mb-4">{t('formulas.noFormulasDesc')}</p>
+            {canEdit && <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
-              New Formula
-            </Button>
+              {t('formulas.newFormula')}
+            </Button>}
           </CardContent>
         </Card>
       ) : (
@@ -777,10 +787,10 @@ function FormulasPage() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pl-[58px] sm:pl-0 shrink-0">
-                  <Button size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => setEditFormula(formula)} title="Edit">
+                  {canEdit && <Button size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => setEditFormula(formula)} title="Edit">
                     <Pencil className="h-[18px] w-[18px]" />
-                  </Button>
-                  <Button
+                  </Button>}
+                  {canDelete && <Button
                     size="icon" variant="outline" className="h-9 w-9 text-muted-foreground hover:text-destructive"
                     onClick={async () => {
                       await deleteMut.mutateAsync(formula.id)
@@ -789,7 +799,7 @@ function FormulasPage() {
                     title="Delete"
                   >
                     <Trash2 className="h-[18px] w-[18px]" />
-                  </Button>
+                  </Button>}
                 </div>
               </CardContent>
             </Card>

@@ -1,0 +1,22 @@
+{
+    "name": "UnityFlux.Tests.Runtime",
+    "rootNamespace": "UnityFlux.Tests",
+    "references": [
+        "UnityFlux.Runtime",
+        "Newtonsoft.Json"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

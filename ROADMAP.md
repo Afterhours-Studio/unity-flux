@@ -50,14 +50,14 @@ Flow:
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| Dashboard | React + Vite + TanStack + shadcn/ui + MCP tools | In progress |
-| Database Server | Express + REST API + MCP WebSocket proxy | In progress |
+| Dashboard | React + Vite + TanStack + shadcn/ui + MCP tools | Done |
+| Database Server | Express + REST API + MCP WebSocket proxy | Done |
 | Docker DB | PostgreSQL via Docker Compose | Done |
-| Unity SDK | C# package, local server fetch | Planned |
+| Unity SDK | C# package, local server fetch | Done |
 | Data Validation | Type check, range, pre-publish gate | Done |
 | Table Templates | 9 built-in templates | Done |
 | Codegen | Auto-generate C# classes from schemas | Done |
-| CSV Import/Export | Bulk data operations | Done |
+| CSV Import/Export | Bulk data operations | In progress |
 
 ### Dashboard Features (Phase 1)
 
@@ -107,13 +107,13 @@ Project Settings > Storage Provider
 | Unity SDK | C# (.NET Standard 2.1) |
 
 ### Deliverables
-- [ ] Docker Compose for local PostgreSQL
-- [ ] MCP server connected to PostgreSQL (replace JSON file)
-- [ ] REST API for dashboard
-- [ ] Dashboard fully wired to REST API
-- [ ] Unity SDK: auth, config fetch, local cache, version hash check
-- [ ] Storage provider toggle in project settings (UI ready, cloud disabled)
-- [ ] Documentation: setup guide, SDK integration guide
+- [x] Docker Compose for local PostgreSQL
+- [x] MCP server connected to PostgreSQL (replace JSON file)
+- [x] REST API for dashboard
+- [x] Dashboard fully wired to REST API
+- [x] Unity SDK: auth, config fetch, local cache, version hash check
+- [x] Storage provider toggle in project settings (UI ready, cloud disabled)
+- [x] Documentation: setup guide, SDK integration guide
 
 ---
 

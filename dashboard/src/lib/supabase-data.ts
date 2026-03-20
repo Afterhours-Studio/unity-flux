@@ -353,6 +353,16 @@ export async function deleteEntry(id: string): Promise<void> {
   }
 }
 
+export async function deleteEntries(schemaId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase.from('entries').delete().in('id', ids)
+  if (error) throw new Error(`Failed to delete entries: ${error.message}`)
+  const schema = await getSchema(schemaId)
+  if (schema) {
+    await insertActivity(schema.projectId, 'row_delete', `Deleted ${ids.length} rows from "${schema.name}"`)
+  }
+}
+
 // ─── Versions ─────────────────────────────────────────
 
 export async function listVersions(projectId: string): Promise<Version[]> {
@@ -400,22 +410,36 @@ export async function publishVersion(projectId: string, environment: Environment
 
   const version = toVersion(data)
 
-  // R2 CDN upload (non-fatal, fire-and-forget from client)
+  // R2 CDN upload (non-fatal but errors are reported)
   try {
     const project = await getProject(projectId)
     const { data: { session } } = await supabase.auth.getSession()
+    console.log('[R2] publish check:', { hasProject: !!project, hasSession: !!session, hasToken: !!session?.access_token, slug: project?.slug })
     if (project && session?.access_token) {
       fetch('/api/r2/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           projectId, versionId: version.id, projectSlug: project.slug,
-          projectName: project.name, environment, versionTag, data: snapshot,
+          environment, versionTag, data: snapshot,
           tableCount: schemas.length, rowCount,
         }),
-      }).catch(() => { /* R2 upload is non-fatal */ })
+      }).then(async (res) => {
+        if (res.ok) {
+          console.log('[R2] CDN publish OK')
+        } else {
+          const body = await res.json().catch(() => ({}))
+          console.error('[R2] CDN publish failed:', res.status, body.error ?? '')
+        }
+      }).catch((err) => {
+        console.error('[R2] CDN publish network error:', err.message)
+      })
+    } else {
+      console.warn('[R2] Skipped — missing project or session')
     }
-  } catch { /* R2 upload is non-fatal */ }
+  } catch (e) {
+    console.error('[R2] CDN publish exception:', e)
+  }
 
   return version
 }
@@ -451,22 +475,36 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
 
   const version = toVersion(data)
 
-  // R2 CDN upload (non-fatal)
+  // R2 CDN upload (non-fatal but errors are reported)
   try {
     const project = await getProject(sourceVersion.projectId)
     const { data: { session } } = await supabase.auth.getSession()
+    console.log('[R2] promote check:', { hasProject: !!project, hasSession: !!session, hasToken: !!session?.access_token, slug: project?.slug })
     if (project && session?.access_token) {
       fetch('/api/r2/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           projectId: sourceVersion.projectId, versionId: version.id, projectSlug: project.slug,
-          projectName: project.name, environment: targetEnv, versionTag,
+          environment: targetEnv, versionTag,
           data: sourceVersion.data, tableCount: sourceVersion.tableCount, rowCount: sourceVersion.rowCount,
         }),
-      }).catch(() => {})
+      }).then(async (res) => {
+        if (res.ok) {
+          console.log('[R2] CDN promote publish OK')
+        } else {
+          const body = await res.json().catch(() => ({}))
+          console.error('[R2] CDN promote publish failed:', res.status, body.error ?? '')
+        }
+      }).catch((err) => {
+        console.error('[R2] CDN promote network error:', err.message)
+      })
+    } else {
+      console.warn('[R2] Promote skipped — missing project or session')
     }
-  } catch {}
+  } catch (e) {
+    console.error('[R2] CDN promote exception:', e)
+  }
 
   return version
 }
@@ -590,6 +628,74 @@ export async function compareVersions(v1Id: string, v2Id: string): Promise<Versi
   return { v1Id, v2Id, tableDiffs, summary }
 }
 
+// ─── Search ──────────────────────────────────────────
+
+export interface SearchResults {
+  projects: Array<{ id: string; name: string; slug: string }>
+  tables: Array<{ id: string; name: string; projectId: string; projectName: string; mode: string }>
+  rows: Array<{ id: string; schemaId: string; tableName: string; projectId: string; projectName: string; preview: string }>
+}
+
+export async function search(query: string): Promise<SearchResults> {
+  const q = query.toLowerCase().trim()
+  if (!q) return { projects: [], tables: [], rows: [] }
+
+  // Search projects by name/slug
+  const { data: projData } = await supabase
+    .from('projects').select('id, name, slug')
+    .or(`name.ilike.%${q}%,slug.ilike.%${q}%`)
+    .limit(5)
+
+  const matchedProjects = (projData ?? []).map(p => ({ id: p.id, name: p.name, slug: p.slug }))
+
+  // Search tables by name (need project name for display)
+  const { data: schemaData } = await supabase
+    .from('schemas').select('id, name, project_id, mode, projects(name)')
+    .ilike('name', `%${q}%`)
+    .limit(10)
+
+  const matchedTables = (schemaData ?? []).map((s: Record<string, unknown>) => ({
+    id: s.id as string,
+    name: s.name as string,
+    projectId: s.project_id as string,
+    projectName: (s.projects as { name: string } | null)?.name ?? '',
+    mode: s.mode as string,
+  }))
+
+  // Search rows by data content
+  // JSONB columns don't support textSearch/ilike via Supabase JS,
+  // so we fetch recent entries and filter client-side.
+  const { data: entryData } = await supabase
+    .from('entries').select('id, schema_id, data, schemas(name, project_id, projects(name))')
+    .order('updated_at', { ascending: false })
+    .limit(200)
+
+  const matchedRows: SearchResults['rows'] = []
+  for (const e of entryData ?? []) {
+    if (matchedRows.length >= 10) break
+    const data = e.data as Record<string, unknown>
+    const match = Object.values(data).some(v =>
+      String(v).toLowerCase().includes(q)
+    )
+    if (!match) continue
+    const schema = e.schemas as { name: string; project_id: string; projects: { name: string } | null } | null
+    const preview = Object.entries(data)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ')
+      .slice(0, 100)
+    matchedRows.push({
+      id: e.id as string,
+      schemaId: e.schema_id as string,
+      tableName: schema?.name ?? '',
+      projectId: schema?.project_id ?? '',
+      projectName: schema?.projects?.name ?? '',
+      preview,
+    })
+  }
+
+  return { projects: matchedProjects, tables: matchedTables, rows: matchedRows }
+}
+
 // ─── Activity ─────────────────────────────────────────
 
 export async function listActivity(projectId: string, limit?: number): Promise<ActivityLog[]> {
@@ -599,6 +705,19 @@ export async function listActivity(projectId: string, limit?: number): Promise<A
   const { data, error } = await query
   if (error) throw error
   return (data ?? []).map(toActivity)
+}
+
+export async function listRecentActivity(limit = 20): Promise<(ActivityLog & { projectName?: string })[]> {
+  const [actResult, projResult] = await Promise.all([
+    supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(limit),
+    supabase.from('projects').select('id, name'),
+  ])
+  if (actResult.error) throw actResult.error
+  const projMap = new Map((projResult.data ?? []).map((p: { id: string; name: string }) => [p.id, p.name]))
+  return (actResult.data ?? []).map((r: Record<string, unknown>) => ({
+    ...toActivity(r),
+    projectName: projMap.get(r.project_id as string),
+  }))
 }
 
 // ─── Live Ops Events ──────────────────────────────────
