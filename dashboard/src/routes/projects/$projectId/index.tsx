@@ -22,13 +22,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useProject, useUpdateProject, useRegenerateApiKey } from '@/hooks/use-projects'
 import { useActivities } from '@/hooks/use-activities'
@@ -463,27 +456,6 @@ function ProjectOverview() {
               <CardTitle className="text-sm">Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">
-                  Environment
-                </Label>
-                <Select
-                  value={project.environment}
-                  onValueChange={(
-                    value: 'development' | 'staging' | 'production',
-                  ) => updateProjectMut.mutate({ id: project.id, updates: { environment: value } })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="development">Development</SelectItem>
-                    <SelectItem value="staging">Staging</SelectItem>
-                    <SelectItem value="production">Production</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
                   Local API Server

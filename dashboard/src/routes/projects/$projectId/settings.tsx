@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -130,7 +131,7 @@ function ProjectSettingsPage() {
         {/* Name */}
         <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
           <p className="text-sm font-medium">Project Name</p>
-          <Input value={project.name} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { name: e.target.value } })} className="max-w-md" />
+          <Input value={project.name} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { name: e.target.value } })} />
         </div>
 
         {/* Slug */}
@@ -139,19 +140,19 @@ function ProjectSettingsPage() {
             <p className="text-sm font-medium">Slug</p>
             <p className="text-xs text-muted-foreground mt-0.5">Auto-generated</p>
           </div>
-          <Input value={project.slug} readOnly className="font-mono text-sm text-muted-foreground bg-muted/30 max-w-md" />
+          <Input value={project.slug} readOnly className="font-mono text-sm text-muted-foreground bg-muted/30" />
         </div>
 
         {/* Description */}
         <div className="grid grid-cols-[180px_1fr] gap-6 items-start">
           <p className="text-sm font-medium pt-2">Description</p>
-          <Textarea value={project.description} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { description: e.target.value } })} rows={2} className="max-w-md" />
+          <Textarea value={project.description} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { description: e.target.value } })} rows={2} />
         </div>
 
         {/* Project ID */}
         <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
           <p className="text-sm font-medium">Project ID</p>
-          <div className="flex gap-2 max-w-md">
+          <div className="flex gap-2">
             <Input value={project.id} readOnly className="font-mono text-sm text-muted-foreground bg-muted/30" />
             <Button variant="outline" size="icon" className="shrink-0" onClick={() => { navigator.clipboard.writeText(project.id); toast.success('Copied') }}>
               <Copy className="h-3.5 w-3.5" />
@@ -159,12 +160,35 @@ function ProjectSettingsPage() {
           </div>
         </div>
 
+        {/* Environment */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
+          <div>
+            <p className="text-sm font-medium">Environment</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Active target</p>
+          </div>
+          <Select
+            value={project.environment}
+            onValueChange={(value: 'development' | 'staging' | 'production') =>
+              updateProjectMut.mutate({ id: project.id, updates: { environment: value } })
+            }
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="development">Development</SelectItem>
+              <SelectItem value="staging">Staging</SelectItem>
+              <SelectItem value="production">Production</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <Separator />
 
         {/* Danger Zone */}
         <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
           <p className="text-sm font-medium text-destructive">Danger Zone</p>
-          <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4 max-w-xl">
+          <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4">
             <div>
               <p className="text-sm font-medium">Delete this project</p>
               <p className="text-xs text-muted-foreground mt-0.5">All data, versions, and formulas will be permanently removed.</p>
@@ -198,6 +222,13 @@ function ProjectSettingsPage() {
             </Dialog>
           </div>
         </div>
+      </div>
+
+      {/* Credit */}
+      <div className="pt-8 pb-2">
+        <p className="text-xs text-muted-foreground/40 text-center">
+          Built by <a href="https://github.com/h1dr0n" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">h1dr0n</a>
+        </p>
       </div>
     </PageTransition>
   )
