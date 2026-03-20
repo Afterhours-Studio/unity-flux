@@ -61,6 +61,31 @@ interface ActivityLog {
   meta?: Record<string, unknown>; createdAt: string
 }
 
+type LiveOpsEventType = 'daily_login' | 'flash_sale' | 'limited_shop' | 'tournament' | 'season_pass' | 'maintenance' | 'world_boss' | 'custom'
+type LiveOpsStatus = 'draft' | 'scheduled' | 'live' | 'ended' | 'cancelled'
+
+interface LiveOpsEvent {
+  id: string; projectId: string; name: string; description: string
+  type: LiveOpsEventType; status: LiveOpsStatus
+  startAt: string; endAt: string; color: string
+  config: Record<string, unknown>; recurring: string | null
+  createdAt: string; updatedAt: string
+}
+
+interface BattlePassTier {
+  id: string; eventId: string; tier: number; xpRequired: number
+  freeReward: string; premiumReward: string
+}
+
+interface FormulaVariable { name: string; type: 'int' | 'float'; defaultValue: number; description: string }
+
+interface Formula {
+  id: string; projectId: string; name: string; description: string
+  expression: string; variables: FormulaVariable[]
+  outputMode: 'method' | 'lookup'; previewInputs: Record<string, number[]>
+  createdAt: string; updatedAt: string
+}
+
 // ─── ID Helpers ────────────────────────────────────────
 
 function generateId(): string { return crypto.randomUUID() }
@@ -227,6 +252,11 @@ export async function addColumn(schemaId: string, field: SchemaField): Promise<S
   return updateSchema(schemaId, { fields: [...schema.fields, field] })
 }
 
+export async function addColumns(schemaId: string, fields: SchemaField[]): Promise<Schema> {
+  const schema = await getSchema(schemaId); if (!schema) throw new Error(`Schema not found: ${schemaId}`)
+  return updateSchema(schemaId, { fields: [...schema.fields, ...fields] })
+}
+
 export async function updateColumn(schemaId: string, columnName: string, updates: Partial<SchemaField>): Promise<Schema> {
   const schema = await getSchema(schemaId); if (!schema) throw new Error(`Schema not found: ${schemaId}`)
   if (!schema.fields.some(f => f.name === columnName)) throw new Error(`Column not found: ${columnName}`)
@@ -261,9 +291,28 @@ export async function createEntry(schemaId: string, entryData: Record<string, un
   return toEntry(data)
 }
 
+export async function createEntries(schemaId: string, rows: Record<string, unknown>[], environment: Environment = 'development'): Promise<DataEntry[]> {
+  if (rows.length === 0) return []
+  const inserts = rows.map(r => ({ id: generateId(), schema_id: schemaId, data: r as unknown as Record<string, unknown>, environment }))
+  const { data, error } = await supabase.from('entries').insert(inserts).select()
+  if (error) throw error
+  const schema = await getSchema(schemaId)
+  if (schema) await insertActivity(schema.projectId, 'row_add', `Added ${rows.length} rows to "${schema.name}"`)
+  return (data ?? []).map(toEntry)
+}
+
 export async function updateEntry(id: string, entryData: Record<string, unknown>): Promise<DataEntry> {
   const { data, error } = await supabase.from('entries').update({ data: entryData as unknown as Record<string, unknown> }).eq('id', id).select().single()
   if (error) throw error; return toEntry(data)
+}
+
+export async function updateEntries(updates: { id: string; data: Record<string, unknown> }[]): Promise<DataEntry[]> {
+  if (updates.length === 0) return []
+  const results: DataEntry[] = []
+  for (const u of updates) {
+    results.push(await updateEntry(u.id, u.data))
+  }
+  return results
 }
 
 export async function deleteEntry(id: string): Promise<void> {
@@ -367,4 +416,140 @@ export async function listActivity(projectId: string, limit?: number): Promise<A
   if (limit) query = query.limit(limit)
   const { data, error } = await query
   if (error) throw error; return (data ?? []).map(toActivity)
+}
+
+// ─── Live Ops Events ─────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toLiveOpsEvent(r: any): LiveOpsEvent {
+  return {
+    id: r.id, projectId: r.project_id, name: r.name, description: r.description ?? '',
+    type: r.type, status: r.status,
+    startAt: r.start_at, endAt: r.end_at,
+    color: r.color ?? '', config: r.config ?? {},
+    recurring: r.recurring ?? null,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toBattlePassTier(r: any): BattlePassTier {
+  return { id: r.id, eventId: r.event_id, tier: r.tier, xpRequired: r.xp_required, freeReward: r.free_reward ?? '', premiumReward: r.premium_reward ?? '' }
+}
+
+export async function listLiveOpsEvents(projectId: string): Promise<LiveOpsEvent[]> {
+  const { data, error } = await supabase.from('live_ops_events').select('*').eq('project_id', projectId).order('start_at')
+  if (error) throw error; return (data ?? []).map(toLiveOpsEvent)
+}
+
+export async function getLiveOpsEvent(id: string): Promise<LiveOpsEvent | null> {
+  const { data, error } = await supabase.from('live_ops_events').select('*').eq('id', id).single()
+  if (error) return null; return toLiveOpsEvent(data)
+}
+
+export async function createLiveOpsEvent(projectId: string, event: Omit<LiveOpsEvent, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>): Promise<LiveOpsEvent> {
+  const id = generateId()
+  const { data, error } = await supabase.from('live_ops_events')
+    .insert({ id, project_id: projectId, name: event.name, description: event.description, type: event.type, status: event.status, start_at: event.startAt, end_at: event.endAt, color: event.color, config: event.config, recurring: event.recurring })
+    .select().single()
+  if (error) throw error
+  await insertActivity(projectId, 'event_create', `Created event "${event.name}"`)
+  return toLiveOpsEvent(data)
+}
+
+export async function updateLiveOpsEvent(id: string, updates: Partial<Pick<LiveOpsEvent, 'name' | 'description' | 'status' | 'startAt' | 'endAt' | 'color' | 'config' | 'recurring'>>): Promise<LiveOpsEvent> {
+  const dbUpdates: Record<string, unknown> = {}
+  if (updates.name !== undefined) dbUpdates.name = updates.name
+  if (updates.description !== undefined) dbUpdates.description = updates.description
+  if (updates.status !== undefined) dbUpdates.status = updates.status
+  if (updates.startAt !== undefined) dbUpdates.start_at = updates.startAt
+  if (updates.endAt !== undefined) dbUpdates.end_at = updates.endAt
+  if (updates.color !== undefined) dbUpdates.color = updates.color
+  if (updates.config !== undefined) dbUpdates.config = updates.config
+  if (updates.recurring !== undefined) dbUpdates.recurring = updates.recurring
+  const { data, error } = await supabase.from('live_ops_events').update(dbUpdates).eq('id', id).select().single()
+  if (error) throw error
+  const event = toLiveOpsEvent(data)
+  await insertActivity(event.projectId, 'event_update', `Updated event "${event.name}"`)
+  return event
+}
+
+export async function deleteLiveOpsEvent(id: string): Promise<void> {
+  const event = await getLiveOpsEvent(id)
+  const { error } = await supabase.from('live_ops_events').delete().eq('id', id)
+  if (error) throw error
+  if (event) await insertActivity(event.projectId, 'event_delete', `Deleted event "${event.name}"`)
+}
+
+// ─── Battle Pass Tiers ───────────────────────────────
+
+export async function listBattlePassTiers(eventId: string): Promise<BattlePassTier[]> {
+  const { data, error } = await supabase.from('battle_pass_tiers').select('*').eq('event_id', eventId).order('tier')
+  if (error) throw error; return (data ?? []).map(toBattlePassTier)
+}
+
+export async function createBattlePassTier(eventId: string, tier: Omit<BattlePassTier, 'id' | 'eventId'>): Promise<BattlePassTier> {
+  const id = generateId()
+  const { data, error } = await supabase.from('battle_pass_tiers')
+    .insert({ id, event_id: eventId, tier: tier.tier, xp_required: tier.xpRequired, free_reward: tier.freeReward, premium_reward: tier.premiumReward })
+    .select().single()
+  if (error) throw error; return toBattlePassTier(data)
+}
+
+export async function updateBattlePassTier(id: string, updates: Partial<Pick<BattlePassTier, 'tier' | 'xpRequired' | 'freeReward' | 'premiumReward'>>): Promise<BattlePassTier> {
+  const dbUpdates: Record<string, unknown> = {}
+  if (updates.tier !== undefined) dbUpdates.tier = updates.tier
+  if (updates.xpRequired !== undefined) dbUpdates.xp_required = updates.xpRequired
+  if (updates.freeReward !== undefined) dbUpdates.free_reward = updates.freeReward
+  if (updates.premiumReward !== undefined) dbUpdates.premium_reward = updates.premiumReward
+  const { data, error } = await supabase.from('battle_pass_tiers').update(dbUpdates).eq('id', id).select().single()
+  if (error) throw error; return toBattlePassTier(data)
+}
+
+export async function deleteBattlePassTier(id: string): Promise<void> {
+  const { error } = await supabase.from('battle_pass_tiers').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ─── Formulas ────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toFormula(r: any): Formula {
+  return {
+    id: r.id, projectId: r.project_id, name: r.name,
+    description: r.description ?? '', expression: r.expression,
+    variables: r.variables ?? [], outputMode: r.output_mode ?? 'method',
+    previewInputs: r.preview_inputs ?? {},
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }
+}
+
+export async function listFormulas(projectId: string): Promise<Formula[]> {
+  const { data, error } = await supabase.from('formulas').select('*').eq('project_id', projectId).order('created_at')
+  if (error) throw error; return (data ?? []).map(toFormula)
+}
+
+export async function createFormula(projectId: string, formula: Omit<Formula, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>): Promise<Formula> {
+  const id = generateId()
+  const { data, error } = await supabase.from('formulas')
+    .insert({ id, project_id: projectId, name: formula.name, description: formula.description, expression: formula.expression, variables: formula.variables as unknown as Record<string, unknown>[], output_mode: formula.outputMode, preview_inputs: formula.previewInputs as unknown as Record<string, unknown> })
+    .select().single()
+  if (error) throw error; return toFormula(data)
+}
+
+export async function updateFormula(id: string, updates: Partial<Omit<Formula, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>>): Promise<Formula> {
+  const dbUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updates.name !== undefined) dbUpdates.name = updates.name
+  if (updates.description !== undefined) dbUpdates.description = updates.description
+  if (updates.expression !== undefined) dbUpdates.expression = updates.expression
+  if (updates.variables !== undefined) dbUpdates.variables = updates.variables
+  if (updates.outputMode !== undefined) dbUpdates.output_mode = updates.outputMode
+  if (updates.previewInputs !== undefined) dbUpdates.preview_inputs = updates.previewInputs
+  const { data, error } = await supabase.from('formulas').update(dbUpdates).eq('id', id).select().single()
+  if (error) throw error; return toFormula(data)
+}
+
+export async function deleteFormula(id: string): Promise<void> {
+  const { error } = await supabase.from('formulas').delete().eq('id', id)
+  if (error) throw error
 }

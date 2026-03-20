@@ -7,11 +7,15 @@ import { createClient } from '@supabase/supabase-js'
 
 // ─── Constants ───────────────────────────────────────────
 
-export const ISSUER = 'https://flux.h1dr0n.org'
-export const MCP_RESOURCE = 'https://flux.h1dr0n.org/api/mcp'
-export const AUTH_ENDPOINT = 'https://flux.h1dr0n.org/authorize'
-export const TOKEN_ENDPOINT = 'https://flux.h1dr0n.org/token'
-export const REGISTRATION_ENDPOINT = 'https://flux.h1dr0n.org/register'
+const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : (process.env.BASE_URL || 'https://flux.h1dr0n.org')
+
+export const ISSUER = BASE_URL
+export const MCP_RESOURCE = `${BASE_URL}/api/mcp`
+export const AUTH_ENDPOINT = `${BASE_URL}/authorize`
+export const TOKEN_ENDPOINT = `${BASE_URL}/token`
+export const REGISTRATION_ENDPOINT = `${BASE_URL}/register`
 
 // ─── Supabase (service role) ─────────────────────────────
 

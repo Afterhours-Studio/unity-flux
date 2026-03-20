@@ -44,7 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Redirect to SPA OAuth login page with all params
-  const loginUrl = new URL('https://flux.h1dr0n.org/oauth/login')
+  const base = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : (process.env.BASE_URL || 'https://flux.h1dr0n.org')
+  const loginUrl = new URL(`${base}/oauth/login`)
   loginUrl.searchParams.set('client_id', clientId)
   loginUrl.searchParams.set('redirect_uri', redirectUri)
   loginUrl.searchParams.set('code_challenge', codeChallenge)
