@@ -15,18 +15,16 @@ import {
   Plus,
   Pencil,
   RotateCcw,
-  ExternalLink,
-  Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useProject, useUpdateProject, useRegenerateApiKey } from '@/hooks/use-projects'
 import { useActivities } from '@/hooks/use-activities'
+import { useVersions } from '@/hooks/use-versions'
 import type { Project } from '@/types/project'
 import { toast } from 'sonner'
 import { PageTransition, motion } from '@/components/motion'
@@ -120,7 +118,7 @@ function QuickStartCard({ project }: { project: Project }) {
   const gitUrl = 'https://github.com/your-studio/unity-flux-sdk.git'
   const envName =
     project.environment.charAt(0).toUpperCase() + project.environment.slice(1)
-  const cdnUrl = project.r2BucketUrl || 'https://cdn.h1dr0n.org'
+  const serverUrl = typeof window !== 'undefined' ? window.location.origin : 'https://flux.h1dr0n.org'
 
   return (
     <Card>
@@ -209,7 +207,7 @@ FluxManager.Instance.Configure(
   new FluxConfig {
     ProjectSlug = "${project.slug}",
     Environment = FluxEnvironment.${envName},
-    CdnBaseUrl  = "${cdnUrl}",
+    ServerUrl   = "${serverUrl}",
     AnonKey     = "${project.anonKey.substring(0, 10)}..."
   }
 );
@@ -223,7 +221,7 @@ await FluxManager.Instance.SyncAsync();`}
               className="absolute top-1.5 right-1.5 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => {
                 navigator.clipboard.writeText(
-                  `FluxManager.Instance.Configure(\n  new FluxConfig {\n    ProjectSlug = "${project.slug}",\n    Environment = FluxEnvironment.${envName},\n    CdnBaseUrl  = "${cdnUrl}",\n    AnonKey     = "${project.anonKey}"\n  }\n);\n\nawait FluxManager.Instance.InitializeAsync();\nawait FluxManager.Instance.SyncAsync();`,
+                  `FluxManager.Instance.Configure(\n  new FluxConfig {\n    ProjectSlug = "${project.slug}",\n    Environment = FluxEnvironment.${envName},\n    ServerUrl   = "${serverUrl}",\n    AnonKey     = "${project.anonKey}"\n  }\n);\n\nawait FluxManager.Instance.InitializeAsync();\nawait FluxManager.Instance.SyncAsync();`,
                 )
                 toast.success(t('overview.codeCopied'))
               }}
@@ -290,95 +288,50 @@ await FluxManager.Instance.SyncAsync();`}
   )
 }
 
-const CDN_ENVS = ['development', 'staging', 'production'] as const
-
-function CdnEndpointField({ project }: { project: Project }) {
+function SdkEndpointField({ project }: { project: Project }) {
   const { t } = useTranslation()
-  const [env, setEnv] = useState<typeof CDN_ENVS[number]>('development')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
-  const cdnBase = project.r2BucketUrl || null
-  const masterUrl = cdnBase
-    ? `${cdnBase}/${project.slug}/${env}/master_version.json`
-    : null
+  const { data: versions = [] } = useVersions(project.id)
 
-  const checkCdn = async () => {
-    if (!masterUrl) return
-    setStatus('loading')
-    try {
-      // HEAD request via no-cors won't give status, so open in new tab for full preview.
-      // Use a quick fetch attempt first to check reachability.
-      const res = await fetch(masterUrl, { method: 'GET', mode: 'cors' })
-      setStatus(res.ok ? 'ok' : 'error')
-    } catch {
-      // CORS block or network error — open in new tab as fallback
-      setStatus('error')
-    }
-  }
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const endpointUrl = `${baseUrl}/api/sdk?action=config&projectId=${project.id}&env=development`
+
+  const hasActiveVersion = versions.some((v) => v.status === 'active')
 
   return (
     <div className="grid gap-1">
-      <div className="flex items-center justify-between pr-20">
+      <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">
-          {t('overview.cdnEndpoint')}
+          SDK API Endpoint
         </Label>
-        {status === 'loading' && (
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-        )}
-        {status === 'error' && (
-          <span className="text-[10px] text-destructive font-medium">Not published</span>
-        )}
-        {status === 'ok' && (
-          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+        {hasActiveVersion ? (
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Active</span>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">No published version</span>
         )}
       </div>
       <div className="flex items-center gap-1.5">
-        <Select value={env} onValueChange={(v) => { setEnv(v as typeof CDN_ENVS[number]); setStatus('idle') }}>
-          <SelectTrigger size="sm" className="!h-7 w-auto shrink-0 text-[10px] gap-1 px-2 py-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="development">{t('environments.development')}</SelectItem>
-            <SelectItem value="staging">{t('environments.staging')}</SelectItem>
-            <SelectItem value="production">{t('environments.production')}</SelectItem>
-          </SelectContent>
-        </Select>
         <div className="flex-1 min-w-0">
           <Input
-            value={masterUrl ?? t('overview.notPublished')}
+            value={endpointUrl}
             readOnly
-            className={cn('font-mono text-[10px] h-7', masterUrl ? 'text-muted-foreground' : 'text-muted-foreground/50 italic')}
+            className="font-mono text-[10px] h-7 text-muted-foreground"
           />
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0"
-          disabled={!masterUrl || status === 'loading'}
-          title="Open in new tab"
           onClick={() => {
-            if (masterUrl) {
-              checkCdn()
-              window.open(masterUrl, '_blank')
-            }
-          }}
-        >
-          <ExternalLink className="h-3 w-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          disabled={!masterUrl}
-          onClick={() => {
-            if (masterUrl) {
-              navigator.clipboard.writeText(masterUrl)
-              toast.success(t('overview.copiedToClipboard'))
-            }
+            navigator.clipboard.writeText(endpointUrl)
+            toast.success(t('overview.copiedToClipboard'))
           }}
         >
           <Copy className="h-3 w-3" />
         </Button>
       </div>
+      <p className="text-[10px] text-muted-foreground">
+        Requires <code className="bg-muted px-1 rounded">Authorization: Bearer &lt;anonKey&gt;</code>
+      </p>
     </div>
   )
 }
@@ -533,8 +486,8 @@ function ProjectOverview() {
               <Separator />
 
               <CopyableField
-                label="CDN Base URL"
-                value={project.r2BucketUrl || 'Not configured'}
+                label="Server URL"
+                value={typeof window !== 'undefined' ? window.location.origin : ''}
               />
             </CardContent>
           </Card>
@@ -600,7 +553,7 @@ function ProjectOverview() {
               </div>
 
               {/* CDN Endpoint — always shown */}
-              <CdnEndpointField project={project} />
+              <SdkEndpointField project={project} />
             </CardContent>
           </Card>
 

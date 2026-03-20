@@ -30,8 +30,7 @@ namespace UnityFlux
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _client = new FluxClient(
                 config.ServerUrl,
-                config.CdnBaseUrl,
-                config.ProjectSlug,
+                config.ProjectId,
                 config.AnonKey,
                 config.RequestTimeoutSec,
                 config.MaxRetries,
@@ -39,8 +38,7 @@ namespace UnityFlux
             _cache = new FluxCache(config.ProjectId, config.EnvironmentString);
             _dataStore = new FluxDataStore();
 
-            var mode = _client.UseCdn ? "CDN" : "API";
-            FluxLogger.Log($"Configured: {config.ProjectSlug} ({config.EnvironmentString}) [{mode}]");
+            FluxLogger.Log($"Configured: {config.ProjectSlug} ({config.EnvironmentString})");
         }
 
         /// <summary>
@@ -139,43 +137,9 @@ namespace UnityFlux
                     return true;
                 }
 
-                // Delta sync is only available via REST API (per-table endpoints)
-                if (!_client.UseCdn && changedTables != null &&
-                    changedTables.Count < (manifest.tableCount > 0 ? manifest.tableCount : 999))
+                // Full download via authenticated API
+                FluxLogger.Log("Syncing: downloading all tables");
                 {
-                    // Delta sync: only download changed tables
-                    FluxLogger.Log($"Delta sync: downloading {changedTables.Count} of {manifest.tableCount} tables");
-                    var existingJson = _cache.LoadConfig();
-                    var existingData = existingJson != null ? FluxJson.ParseObject(existingJson) : new JObject();
-
-                    foreach (var tableName in changedTables)
-                    {
-                        var tableJson = await _client.FetchTableDataAsync(
-                            _config.ProjectId, manifest.id, tableName);
-                        existingData[tableName] = JArray.Parse(tableJson);
-                    }
-
-                    // Remove tables that no longer exist in the new version
-                    if (manifest.tableHashes != null)
-                    {
-                        var removedTables = new List<string>();
-                        foreach (var prop in existingData.Properties())
-                        {
-                            if (!manifest.tableHashes.ContainsKey(prop.Name))
-                                removedTables.Add(prop.Name);
-                        }
-                        foreach (var name in removedTables)
-                            existingData.Remove(name);
-                    }
-
-                    var configJson = existingData.ToString();
-                    _cache.SaveConfig(configJson);
-                    _dataStore.Load(configJson);
-                }
-                else
-                {
-                    // Full download (always used for CDN mode)
-                    FluxLogger.Log("Full sync: downloading all tables");
                     var configJson = await _client.FetchConfigDataAsync(
                         _config.ProjectId, _config.EnvironmentString);
                     _cache.SaveConfig(configJson);

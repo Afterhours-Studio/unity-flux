@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -14,6 +17,7 @@ namespace UnityFlux.Editor
         private SerializedObject _serializedConfig;
         private string _testResult;
         private MessageType _testResultType;
+        private readonly HashSet<string> _expandedTables = new();
 
         private static readonly string[] Tabs = { "Status", "Config", "Tables", "Sync" };
         private static readonly Color Accent = new(0.92f, 0.68f, 0.2f);
@@ -255,11 +259,10 @@ namespace UnityFlux.Editor
 
             BeginSection("Connection");
             DrawProp("_serverUrl", "Server URL");
-            DrawProp("_cdnBaseUrl", "CDN URL");
             EndSection();
 
             BeginSection("Authentication");
-            DrawProp("_anonKey", "Anonymous Key");
+            DrawProp("_anonKey", "Anon Key");
             EndSection();
 
             _serializedConfig.ApplyModifiedProperties();
@@ -291,19 +294,70 @@ namespace UnityFlux.Editor
 
         private async void TestConnection()
         {
+            var serverUrl = _config.ServerUrl;
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                _testResult = "Server URL is empty";
+                _testResultType = MessageType.Error;
+                Repaint();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_config.AnonKey))
+            {
+                _testResult = "Anon Key is required";
+                _testResultType = MessageType.Error;
+                Repaint();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_config.ProjectId))
+            {
+                _testResult = "Project ID is required";
+                _testResultType = MessageType.Error;
+                Repaint();
+                return;
+            }
+
+            var testUrl = $"{serverUrl}/api/sdk?action=manifest&projectId={_config.ProjectId}&env={_config.EnvironmentString}";
             _testResult = "Testing...";
             _testResultType = MessageType.Info;
             Repaint();
+
             try
             {
-                var request = UnityEngine.Networking.UnityWebRequest.Get($"{_config.ServerUrl}/api/status");
+                var request = UnityEngine.Networking.UnityWebRequest.Get(testUrl);
+                request.timeout = 10;
+                request.SetRequestHeader("Authorization", $"Bearer {_config.AnonKey}");
+                request.SetRequestHeader("Accept", "application/json");
+
                 var op = request.SendWebRequest();
                 while (!op.isDone) await System.Threading.Tasks.Task.Yield();
-                _testResult = request.result == UnityEngine.Networking.UnityWebRequest.Result.Success
-                    ? $"Connected to {_config.ServerUrl}"
-                    : $"Failed: {request.error}";
-                _testResultType = request.result == UnityEngine.Networking.UnityWebRequest.Result.Success
-                    ? MessageType.Info : MessageType.Error;
+
+                if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
+                {
+                    var json = Newtonsoft.Json.Linq.JObject.Parse(request.downloadHandler.text);
+                    var version = json["version"]?.ToString() ?? "unknown";
+                    var tables = json["tableCount"]?.ToObject<int>() ?? 0;
+                    var rows = json["rowCount"]?.ToObject<int>() ?? 0;
+                    _testResult = $"Connected — {version} ({tables} tables, {rows} rows)";
+                    _testResultType = MessageType.Info;
+                }
+                else if (request.responseCode == 403)
+                {
+                    _testResult = "Auth failed — check Anon Key";
+                    _testResultType = MessageType.Error;
+                }
+                else if (request.responseCode == 404)
+                {
+                    _testResult = "No active version for this environment";
+                    _testResultType = MessageType.Warning;
+                }
+                else
+                {
+                    _testResult = $"Failed ({request.responseCode}): {request.error}";
+                    _testResultType = MessageType.Error;
+                }
             }
             catch (System.Exception ex)
             {
@@ -335,46 +389,149 @@ namespace UnityFlux.Editor
             foreach (var name in tables)
             {
                 var isConfig = FluxManager.Instance.DataStore.IsConfigTable(name);
+                var expanded = _expandedTables.Contains(name);
 
-                // Card
-                var cardRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(28));
+                // Card header — rect-based for precise pixel alignment
+                var cardRect = GUILayoutUtility.GetRect(0, 28, GUILayout.ExpandWidth(true));
                 if (Event.current.type == EventType.Repaint)
                     EditorGUI.DrawRect(cardRect, CardBg);
 
-                GUILayout.Space(8);
+                // Native foldout arrow (always pixel-perfect)
+                var arrowRect = new Rect(cardRect.x + 6, cardRect.y + 6, 16, 16);
+                EditorGUI.Foldout(arrowRect, expanded, GUIContent.none);
 
                 // Badge
                 var badgeColor = isConfig ? new Color(0.55f, 0.35f, 0.85f) : new Color(0.2f, 0.55f, 0.85f);
-                var badgeRect2 = GUILayoutUtility.GetRect(34, 16);
-                badgeRect2.y += 6;
+                var badgeRect = new Rect(cardRect.x + 24, cardRect.y + 6, 34, 16);
                 if (Event.current.type == EventType.Repaint)
-                    EditorGUI.DrawRect(badgeRect2, new Color(badgeColor.r, badgeColor.g, badgeColor.b, 0.25f));
+                    EditorGUI.DrawRect(badgeRect, new Color(badgeColor.r, badgeColor.g, badgeColor.b, 0.25f));
                 var bs = new GUIStyle(EditorStyles.miniLabel)
                 {
                     fontSize = 8, fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = badgeColor },
                 };
-                GUI.Label(badgeRect2, isConfig ? "CFG" : "DATA", bs);
+                GUI.Label(badgeRect, isConfig ? "CFG" : "DATA", bs);
 
-                GUILayout.Space(6);
-                GUILayout.Label(name, EditorStyles.boldLabel);
-                GUILayout.FlexibleSpace();
+                // Table name
+                var nameRect = new Rect(cardRect.x + 64, cardRect.y, cardRect.width - 140, cardRect.height);
+                GUI.Label(nameRect, name, EditorStyles.boldLabel);
 
-                var json = Flux.GetRawJson(name);
-                if (json != null)
+                // Row count (right-aligned)
+                var rawJson = Flux.GetRawJson(name);
+                JArray rows = null;
+                if (rawJson != null)
                 {
-                    var count = Newtonsoft.Json.Linq.JArray.Parse(json).Count;
-                    var rowStyle = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedText } };
-                    GUILayout.Label($"{count} rows", rowStyle);
+                    rows = JArray.Parse(rawJson);
+                    var countStyle = new GUIStyle(EditorStyles.miniLabel)
+                    {
+                        alignment = TextAnchor.MiddleRight,
+                        normal = { textColor = MutedText },
+                    };
+                    var countRect = new Rect(cardRect.xMax - 70, cardRect.y, 62, cardRect.height);
+                    GUI.Label(countRect, $"{rows.Count} rows", countStyle);
                 }
-                GUILayout.Space(8);
 
-                EditorGUILayout.EndHorizontal();
+                // Click to toggle
+                if (Event.current.type == EventType.MouseDown && cardRect.Contains(Event.current.mousePosition))
+                {
+                    if (expanded) _expandedTables.Remove(name);
+                    else _expandedTables.Add(name);
+                    Event.current.Use();
+                    Repaint();
+                }
+                EditorGUIUtility.AddCursorRect(cardRect, MouseCursor.Link);
+
+                // Expanded rows
+                if (expanded && rows != null && rows.Count > 0)
+                    DrawTableRows(rows);
+
                 GUILayout.Space(2);
             }
 
             EndSection();
+        }
+
+        private void DrawTableRows(JArray rows)
+        {
+            // Collect columns
+            var columns = new List<string>();
+            if (rows[0] is JObject firstRow)
+                foreach (var prop in firstRow.Properties())
+                    columns.Add(prop.Name);
+            if (columns.Count == 0) return;
+
+            // Measure column widths from actual content
+            var measure = new GUIStyle(EditorStyles.miniLabel);
+            var colW = new float[columns.Count];
+            for (int c = 0; c < columns.Count; c++)
+            {
+                colW[c] = measure.CalcSize(new GUIContent(columns[c])).x;
+                for (int r = 0, n = Mathf.Min(rows.Count, 15); r < n; r++)
+                    if (rows[r] is JObject sampleRow)
+                        colW[c] = Mathf.Max(colW[c], measure.CalcSize(new GUIContent(sampleRow[columns[c]]?.ToString() ?? "")).x);
+                colW[c] = Mathf.Clamp(colW[c] + 16, 48, 220);
+            }
+
+            var headerStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = MutedText },
+                clipping = TextClipping.Clip,
+                padding = new RectOffset(4, 4, 0, 0),
+            };
+            var cellStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                clipping = TextClipping.Clip,
+                padding = new RectOffset(4, 4, 0, 0),
+            };
+
+            var headerBg = Pro ? C(0.19f) : C(0.88f);
+            var evenBg = Pro ? C(0.22f) : C(0.93f);
+            var oddBg = Pro ? C(0.20f) : C(0.91f);
+            const float rowH = 20;
+            const float indent = 28;
+
+            // Header
+            var hRect = GUILayoutUtility.GetRect(0, rowH, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(hRect, headerBg);
+            float x = hRect.x + indent;
+            for (int c = 0; c < columns.Count; c++)
+            {
+                GUI.Label(new Rect(x, hRect.y, colW[c], rowH), columns[c], headerStyle);
+                x += colW[c];
+            }
+
+            // Rows (cap 50)
+            int max = Mathf.Min(rows.Count, 50);
+            for (int i = 0; i < max; i++)
+            {
+                if (rows[i] is not JObject row) continue;
+                var rRect = GUILayoutUtility.GetRect(0, rowH, GUILayout.ExpandWidth(true));
+                if (Event.current.type == EventType.Repaint)
+                    EditorGUI.DrawRect(rRect, i % 2 == 0 ? evenBg : oddBg);
+                x = rRect.x + indent;
+                for (int c = 0; c < columns.Count; c++)
+                {
+                    var val = row[columns[c]];
+                    var text = val?.Type switch
+                    {
+                        JTokenType.Null => "\u2014",
+                        JTokenType.Boolean => val.Value<bool>() ? "true" : "false",
+                        _ => val?.ToString() ?? "",
+                    };
+                    GUI.Label(new Rect(x, rRect.y, colW[c], rowH), text, cellStyle);
+                    x += colW[c];
+                }
+            }
+
+            if (rows.Count > max)
+            {
+                var more = new GUIStyle(EditorStyles.centeredGreyMiniLabel);
+                GUILayout.Label($"\u2026 and {rows.Count - max} more rows", more);
+            }
+            GUILayout.Space(4);
         }
 
         // ─── Sync Tab ────────────────────────────────────
@@ -384,10 +541,10 @@ namespace UnityFlux.Editor
             BeginSection("Sync Operations");
 
             var desc = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedText }, wordWrap = true };
-            GUILayout.Label("Load cached data or fetch latest config from server.", desc);
+            GUILayout.Label("Simulate runtime sync — fetches config from CDN/API and saves to runtime cache (persistentDataPath).", desc);
             GUILayout.Space(8);
 
-            if (GUILayout.Button("Initialize (Load Cache)", GUILayout.Height(28)))
+            if (GUILayout.Button("Load from Cache", GUILayout.Height(28)))
             {
                 RunAsync(async () =>
                 {
@@ -402,7 +559,7 @@ namespace UnityFlux.Editor
 
             var prevBg = GUI.backgroundColor;
             GUI.backgroundColor = Accent;
-            if (GUILayout.Button("Sync (Check & Download)", GUILayout.Height(32)))
+            if (GUILayout.Button("Sync from Server (Runtime)", GUILayout.Height(32)))
             {
                 RunAsync(async () =>
                 {
@@ -419,7 +576,7 @@ namespace UnityFlux.Editor
 
             GUILayout.Space(4);
 
-            if (GUILayout.Button("Force Refresh", GUILayout.Height(22)))
+            if (GUILayout.Button("Force Re-download", GUILayout.Height(22)))
             {
                 RunAsync(async () =>
                 {
@@ -557,6 +714,7 @@ namespace UnityFlux.Editor
         private static void EndSection()
         {
             GUILayout.EndVertical();
+            GUILayout.Space(16); // right indent (matches left)
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
             GUILayout.Space(8);
@@ -597,5 +755,6 @@ namespace UnityFlux.Editor
             }
             Repaint();
         }
+
     }
 }

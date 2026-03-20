@@ -416,11 +416,11 @@ export async function publishVersion(projectId: string, environment: Environment
     const { data: { session } } = await supabase.auth.getSession()
     console.log('[R2] publish check:', { hasProject: !!project, hasSession: !!session, hasToken: !!session?.access_token, slug: project?.slug })
     if (project && session?.access_token) {
-      fetch('/api/r2/publish', {
+      fetch('/api/r2?action=publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          projectId, versionId: version.id, projectSlug: project.slug,
+          projectId, versionId: version.id,
           environment, versionTag, data: snapshot,
           tableCount: schemas.length, rowCount,
         }),
@@ -481,11 +481,11 @@ export async function promoteVersion(versionId: string, targetEnv: Environment):
     const { data: { session } } = await supabase.auth.getSession()
     console.log('[R2] promote check:', { hasProject: !!project, hasSession: !!session, hasToken: !!session?.access_token, slug: project?.slug })
     if (project && session?.access_token) {
-      fetch('/api/r2/publish', {
+      fetch('/api/r2?action=publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          projectId: sourceVersion.projectId, versionId: version.id, projectSlug: project.slug,
+          projectId: sourceVersion.projectId, versionId: version.id,
           environment: targetEnv, versionTag,
           data: sourceVersion.data, tableCount: sourceVersion.tableCount, rowCount: sourceVersion.rowCount,
         }),
@@ -532,11 +532,11 @@ export async function rollbackVersion(versionId: string): Promise<void> {
     const project = await getProject(v.projectId)
     const { data: { session } } = await supabase.auth.getSession()
     if (project && session?.access_token) {
-      fetch('/api/r2/rollback', {
+      fetch('/api/r2?action=rollback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          projectSlug: project.slug, projectName: project.name, environment: v.environment,
+          projectId: v.projectId, environment: v.environment,
           versionTag: v.versionTag, tableCount: v.tableCount, rowCount: v.rowCount,
         }),
       }).catch(() => {})

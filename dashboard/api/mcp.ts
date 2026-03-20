@@ -4,7 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import * as db from './lib/supabase-server.js'
 import { verifyAccessToken, ISSUER } from './lib/oauth.js'
-import { isR2Configured, getCdnUrl, getR2PublicUrl } from './lib/r2.js'
+import { isR2Configured } from './lib/r2.js'
 
 const MCP_API_KEY = process.env.FLUX_MCP_API_KEY
 
@@ -225,24 +225,19 @@ function registerTools(server: McpServer) {
   }, ({ formulaId }) => db.deleteFormula(formulaId as string))
 
   // ─── CDN ─────────────────────────────────────────
-  tool('get_cdn_url', 'Get the CDN URL for a project\'s config delivery. Returns per-environment URLs for Unity SDK to fetch configs.', {
+  tool('get_cdn_url', 'Get the SDK API endpoints for a project. Returns authenticated endpoints for Unity SDK to fetch configs.', {
     projectId: z.string(),
   }, async ({ projectId }) => {
-    if (!isR2Configured()) return { configured: false, message: 'R2 CDN is not configured on this server' }
     const project = await db.getProject(projectId as string)
     if (!project) throw new Error(`Project not found: ${projectId}`)
-    const baseUrl = getR2PublicUrl()
-    const environments = ['development', 'staging', 'production']
-    const urls: Record<string, string> = {}
-    for (const env of environments) {
-      urls[env] = getCdnUrl(project.slug, env, project.name)
-    }
     return {
-      configured: true,
-      baseUrl,
-      projectSlug: project.slug,
-      r2BucketUrl: project.r2BucketUrl,
-      urls,
+      r2Configured: isR2Configured(),
+      sdkEndpoints: {
+        manifest: `/api/sdk/manifest?projectId=${projectId}&env={environment}`,
+        config: `/api/sdk/config?projectId=${projectId}&env={environment}`,
+        asset: `/api/sdk/asset?projectId=${projectId}&env={environment}&key={filename}`,
+      },
+      note: 'All SDK endpoints require Authorization: Bearer <anonKey> header',
     }
   })
 

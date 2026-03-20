@@ -1,3 +1,4 @@
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -98,22 +99,57 @@ namespace UnityFlux.Editor
 
         private async void TestConnection()
         {
-            var url = _serverUrl.stringValue?.TrimEnd('/');
-            if (string.IsNullOrEmpty(url))
+            var serverUrl = _serverUrl.stringValue?.TrimEnd('/');
+            var cdnUrl = _cdnBaseUrl.stringValue?.TrimEnd('/');
+            var slug = _projectSlug.stringValue;
+            var env = ((FluxEnvironment)_environment.enumValueIndex) switch
             {
-                _testResult = "Server URL is empty";
+                FluxEnvironment.Development => "development",
+                FluxEnvironment.Staging => "staging",
+                FluxEnvironment.Production => "production",
+                _ => "development"
+            };
+
+            // Compute access hash from anonKey
+            var anonKey = _anonKey.stringValue ?? "";
+            var accessHash = ComputeAccessHash(anonKey);
+
+            // Determine what to test
+            string testUrl;
+            string mode;
+            if (!string.IsNullOrEmpty(cdnUrl))
+            {
+                if (string.IsNullOrEmpty(anonKey))
+                {
+                    _testResult = "Anonymous Key is required for CDN access";
+                    _testResultType = MessageType.Error;
+                    Repaint();
+                    return;
+                }
+                testUrl = $"{cdnUrl}/{slug}/{accessHash}/{env}/master_version.json";
+                mode = "CDN";
+            }
+            else if (!string.IsNullOrEmpty(serverUrl))
+            {
+                testUrl = $"{serverUrl}/api/status";
+                mode = "API";
+            }
+            else
+            {
+                _testResult = "Both Server URL and CDN URL are empty";
                 _testResultType = MessageType.Error;
                 Repaint();
                 return;
             }
 
-            _testResult = "Testing...";
+            _testResult = $"Testing {mode}...";
             _testResultType = MessageType.Info;
             Repaint();
 
             try
             {
-                var request = UnityEngine.Networking.UnityWebRequest.Get($"{url}/api/status");
+                var request = UnityEngine.Networking.UnityWebRequest.Get(testUrl);
+                request.timeout = 10;
                 var op = request.SendWebRequest();
 
                 while (!op.isDone)
@@ -121,12 +157,12 @@ namespace UnityFlux.Editor
 
                 if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
                 {
-                    _testResult = $"Connected to {url}";
+                    _testResult = $"{mode} OK — {testUrl}";
                     _testResultType = MessageType.Info;
                 }
                 else
                 {
-                    _testResult = $"Failed: {request.error}";
+                    _testResult = $"{mode} failed ({request.responseCode}): {request.error}\nURL: {testUrl}";
                     _testResultType = MessageType.Error;
                 }
             }
@@ -137,6 +173,16 @@ namespace UnityFlux.Editor
             }
 
             Repaint();
+        }
+
+        private static string ComputeAccessHash(string anonKey)
+        {
+            if (string.IsNullOrEmpty(anonKey)) return "";
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(anonKey));
+            var sb = new StringBuilder(16);
+            for (int i = 0; i < 8; i++) sb.Append(bytes[i].ToString("x2"));
+            return sb.ToString();
         }
     }
 }

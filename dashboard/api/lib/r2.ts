@@ -1,8 +1,13 @@
 /**
- * R2 (S3-compatible) upload utility for CDN config delivery.
+ * R2 (S3-compatible) storage utility.
  * Uploads versioned config snapshots + master_version pointer.
+ *
+ * Security: R2 bucket is PRIVATE. All access goes through authenticated
+ * Vercel API endpoints that generate short-lived presigned URLs.
+ * Path: /{projectId}/{env}/config_{version}.json
  */
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createHash } from 'crypto'
 
 // ─── Config ──────────────────────────────────────────
@@ -42,14 +47,14 @@ function sha256(data: string): string {
  * Returns the CDN URL for the versioned config file.
  */
 export async function uploadConfigVersion(params: {
-  slug: string
+  projectId: string
   environment: string
   versionTag: string
   snapshot: Record<string, Record<string, unknown>[]>
   tableCount: number
   rowCount: number
-}): Promise<{ r2Url: string; hash: string }> {
-  const { slug, environment, versionTag, snapshot, tableCount, rowCount } = params
+}): Promise<{ r2Key: string; hash: string }> {
+  const { projectId, environment, versionTag, snapshot, tableCount, rowCount } = params
   const s3 = getS3Client()
 
   // Build the config payload
@@ -61,8 +66,8 @@ export async function uploadConfigVersion(params: {
   }, null, 2)
 
   const hash = sha256(configPayload)
-  const configKey = `${slug}/${environment}/config_${versionTag}.json`
-  const masterKey = `${slug}/${environment}/master_version.json`
+  const configKey = buildConfigKey(projectId, environment, versionTag)
+  const masterKey = buildMasterKey(projectId, environment)
 
   // Upload immutable versioned config
   await s3.send(new PutObjectCommand({
@@ -80,7 +85,7 @@ export async function uploadConfigVersion(params: {
     hash,
     tableCount,
     rowCount,
-    configUrl: `${R2_PUBLIC_URL}/${configKey}`,
+    configKey,
     publishedAt: new Date().toISOString(),
   }, null, 2)
 
@@ -92,8 +97,7 @@ export async function uploadConfigVersion(params: {
     CacheControl: 'public, max-age=60',
   }))
 
-  const r2Url = `${R2_PUBLIC_URL}/${configKey}`
-  return { r2Url, hash }
+  return { r2Key: configKey, hash }
 }
 
 /**
@@ -101,22 +105,22 @@ export async function uploadConfigVersion(params: {
  * Points master_version.json to an existing versioned config.
  */
 export async function updateMasterVersion(params: {
-  slug: string
+  projectId: string
   environment: string
   versionTag: string
   tableCount: number
   rowCount: number
 }): Promise<void> {
-  const { slug, environment, versionTag, tableCount, rowCount } = params
+  const { projectId, environment, versionTag, tableCount, rowCount } = params
   const s3 = getS3Client()
 
-  const configKey = `${slug}/${environment}/config_${versionTag}.json`
-  const masterKey = `${slug}/${environment}/master_version.json`
+  const configKey = buildConfigKey(projectId, environment, versionTag)
+  const masterKey = buildMasterKey(projectId, environment)
 
   const masterPayload = JSON.stringify({
     version: versionTag,
     environment,
-    configUrl: `${R2_PUBLIC_URL}/${configKey}`,
+    configKey,
     tableCount,
     rowCount,
     rolledBackAt: new Date().toISOString(),
@@ -132,15 +136,33 @@ export async function updateMasterVersion(params: {
 }
 
 /**
- * Get the public CDN URL for a project's environment.
+ * Generate a presigned GET URL for an R2 object.
+ * The URL expires after the specified duration (default 5 minutes).
+ * This allows authenticated access without making the bucket public.
  */
-export function getCdnUrl(slug: string, environment: string): string {
-  return `${R2_PUBLIC_URL}/${slug}/${environment}/master_version.json`
+export async function generatePresignedUrl(
+  key: string,
+  expiresIn: number = 300,
+): Promise<string> {
+  const s3 = getS3Client()
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+  })
+  return getSignedUrl(s3, command, { expiresIn })
 }
 
 /**
- * Get the public URL base.
+ * Build the R2 object key for a config version file.
  */
-export function getR2PublicUrl(): string {
-  return R2_PUBLIC_URL
+export function buildConfigKey(projectId: string, environment: string, versionTag: string): string {
+  return `${projectId}/${environment}/config_${versionTag}.json`
 }
+
+/**
+ * Build the R2 object key for the master version pointer.
+ */
+export function buildMasterKey(projectId: string, environment: string): string {
+  return `${projectId}/${environment}/master_version.json`
+}
+

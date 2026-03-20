@@ -13,13 +13,11 @@ namespace UnityFlux
         [SerializeField] private FluxEnvironment _environment = FluxEnvironment.Development;
 
         [Header("Connection")]
-        [Tooltip("Phase 1: http://localhost:3001  |  Phase 2: Supabase URL")]
-        [SerializeField] private string _serverUrl = "http://localhost:3001";
-
-        [Tooltip("CDN base URL (e.g. https://cdn.example.com). Do NOT include slug or path — the SDK appends /{slug}/{env}/... automatically.")]
-        [SerializeField] private string _cdnBaseUrl;
+        [Tooltip("Dashboard server URL (e.g. https://flux.h1dr0n.org)")]
+        [SerializeField] private string _serverUrl;
 
         [Header("Authentication")]
+        [Tooltip("Client-safe read-only key from dashboard. Found in Overview > SDK Credentials > Anon Key. Required to fetch config data.")]
         [SerializeField] private string _anonKey;
 
         [Header("Retry & Timeout")]
@@ -35,8 +33,7 @@ namespace UnityFlux
         public string ProjectId => _projectId;
         public string ProjectSlug => _projectSlug;
         public FluxEnvironment Environment => _environment;
-        public string ServerUrl => _serverUrl.TrimEnd('/');
-        public string CdnBaseUrl => _cdnBaseUrl?.TrimEnd('/') ?? "";
+        public string ServerUrl => _serverUrl?.TrimEnd('/') ?? "";
         public string AnonKey => _anonKey;
         public int RequestTimeoutSec => _requestTimeoutSec;
         public int MaxRetries => _maxRetries;
