@@ -67,55 +67,18 @@ function ProjectSettingsPage() {
         </p>
       </div>
 
-      {/* Project Icon — Telegram style */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <div className="cursor-pointer hover:opacity-80 transition-opacity">
-            <ProjectIcon icon={project.icon || ''} name={project.name} size="lg" />
-          </div>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-48">
-          <DropdownMenuItem onClick={() => iconInputRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-2" />
-            Set Project Photo
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setEmojiPickerOpen(true)}>
-            <Smile className="h-4 w-4 mr-2" />
-            Use an Emoji
-          </DropdownMenuItem>
-          {project.icon && (
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => {
-                updateProjectMut.mutate({ id: project.id, updates: { icon: '' } })
-                toast.success('Icon removed')
-              }}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Remove
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <input
-        ref={iconInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (!file) return
-          const reader = new FileReader()
-          reader.onload = () => {
-            updateProjectMut.mutate({ id: project.id, updates: { icon: reader.result as string } })
-            toast.success('Icon updated')
-          }
-          reader.readAsDataURL(file)
-          e.target.value = ''
-        }}
-      />
-
-      {/* Emoji picker dialog */}
+      {/* Hidden inputs + dialogs */}
+      <input ref={iconInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = () => {
+          updateProjectMut.mutate({ id: project.id, updates: { icon: reader.result as string } })
+          toast.success('Icon updated')
+        }
+        reader.readAsDataURL(file)
+        e.target.value = ''
+      }} />
       <Dialog open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
         <DialogContent className="sm:max-w-xs p-0" showCloseButton={false}>
           <DialogHeader className="px-4 pt-4 pb-2">
@@ -123,99 +86,118 @@ function ProjectSettingsPage() {
           </DialogHeader>
           <div className="flex flex-wrap gap-1 px-4 pb-4 max-h-[240px] overflow-y-auto">
             {['🎮', '⚔️', '🏰', '🚀', '🎯', '🔥', '💎', '🌟', '🎲', '🎪', '🐉', '🦊', '🐺', '🦁', '🦅', '🌍', '🌙', '☀️', '⚡', '💀', '👾', '🤖', '🧙', '🧝', '🏹', '🗡️', '🛡️', '💰', '🏆', '🎖️', '📦', '🔮', '🧪', '⚗️', '🔧', '⚙️', '🎵', '🎸', '🏎️', '✈️', '🚢', '🏠', '🏗️', '🌲', '🌸', '❄️', '🔶', '🟢', '🔵', '🟣'].map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  updateProjectMut.mutate({ id: project.id, updates: { icon: emoji } })
-                  setEmojiPickerOpen(false)
-                  toast.success('Icon updated')
-                }}
-                className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-accent text-xl transition-colors"
-              >
-                {emoji}
-              </button>
+              <button key={emoji} onClick={() => { updateProjectMut.mutate({ id: project.id, updates: { icon: emoji } }); setEmojiPickerOpen(false); toast.success('Icon updated') }} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-accent text-xl transition-colors">{emoji}</button>
             ))}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Form fields */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Project Name</Label>
-          <Input
-            value={project.name}
-            onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { name: e.target.value } })}
-          />
+      {/* ── Two-column layout ── */}
+      <div className="space-y-6">
+        {/* Icon */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-start">
+          <div className="pt-1">
+            <p className="text-sm font-medium">Project Icon</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Click to change</p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="cursor-pointer hover:opacity-80 transition-opacity">
+                <ProjectIcon icon={project.icon || ''} name={project.name} size="lg" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => iconInputRef.current?.click()}>
+                <Camera className="h-4 w-4 mr-2" />
+                Set Project Photo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEmojiPickerOpen(true)}>
+                <Smile className="h-4 w-4 mr-2" />
+                Use an Emoji
+              </DropdownMenuItem>
+              {project.icon && (
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { updateProjectMut.mutate({ id: project.id, updates: { icon: '' } }); toast.success('Icon removed') }}>
+                  <X className="h-4 w-4 mr-2" />
+                  Remove
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div className="grid gap-1.5">
-          <Label className="text-xs">Slug</Label>
-          <Input value={project.slug} readOnly className="font-mono text-sm text-muted-foreground" />
+
+        <Separator />
+
+        {/* Name */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
+          <p className="text-sm font-medium">Project Name</p>
+          <Input value={project.name} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { name: e.target.value } })} className="max-w-md" />
         </div>
-      </div>
 
-      <div className="grid gap-1.5">
-        <Label className="text-xs">Description</Label>
-        <Textarea
-          value={project.description}
-          onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { description: e.target.value } })}
-          rows={2}
-        />
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label className="text-xs">Project ID</Label>
-        <Input value={project.id} readOnly className="font-mono text-sm text-muted-foreground" />
-      </div>
-
-      <Separator />
-
-      {/* Danger Zone */}
-      <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4">
-        <div>
-          <p className="text-sm font-medium">Delete this project</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            All data, versions, and formulas will be permanently removed.
-          </p>
+        {/* Slug */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
+          <div>
+            <p className="text-sm font-medium">Slug</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Auto-generated</p>
+          </div>
+          <Input value={project.slug} readOnly className="font-mono text-sm text-muted-foreground bg-muted/30 max-w-md" />
         </div>
-        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <DialogTrigger asChild>
-            <Button variant="destructive" size="sm">
-              <Trash2 className="h-3.5 w-3.5 mr-1" />
-              Delete
+
+        {/* Description */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-start">
+          <p className="text-sm font-medium pt-2">Description</p>
+          <Textarea value={project.description} onChange={(e) => updateProjectMut.mutate({ id: project.id, updates: { description: e.target.value } })} rows={2} className="max-w-md" />
+        </div>
+
+        {/* Project ID */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
+          <p className="text-sm font-medium">Project ID</p>
+          <div className="flex gap-2 max-w-md">
+            <Input value={project.id} readOnly className="font-mono text-sm text-muted-foreground bg-muted/30" />
+            <Button variant="outline" size="icon" className="shrink-0" onClick={() => { navigator.clipboard.writeText(project.id); toast.success('Copied') }}>
+              <Copy className="h-3.5 w-3.5" />
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md p-0">
-            <DialogHeader className="px-6 pt-6 pb-4 border-b">
-              <DialogTitle>Delete Project</DialogTitle>
-              <DialogDescription>
-                This action cannot be undone. This will permanently delete{' '}
-                <span className="font-semibold text-foreground">{project.name}</span>{' '}
-                and all associated data.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2 px-6 py-4">
-              <Label htmlFor="delete-confirm">
-                Type <span className="font-mono font-semibold text-foreground">{project.slug}</span> to confirm
-              </Label>
-              <Input
-                id="delete-confirm"
-                placeholder={project.slug}
-                value={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.value)}
-                autoComplete="off"
-              />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Danger Zone */}
+        <div className="grid grid-cols-[180px_1fr] gap-6 items-center">
+          <p className="text-sm font-medium text-destructive">Danger Zone</p>
+          <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4 max-w-xl">
+            <div>
+              <p className="text-sm font-medium">Delete this project</p>
+              <p className="text-xs text-muted-foreground mt-0.5">All data, versions, and formulas will be permanently removed.</p>
             </div>
-            <DialogFooter className="px-6 pb-6 pt-2">
-              <Button variant="outline" onClick={() => { setDeleteOpen(false); setDeleteConfirm('') }}>
-                Cancel
-              </Button>
-              <Button variant="destructive" disabled={!canDelete} onClick={handleDelete}>
-                Delete Permanently
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md p-0">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b">
+                  <DialogTitle>Delete Project</DialogTitle>
+                  <DialogDescription>
+                    This action cannot be undone. This will permanently delete{' '}
+                    <span className="font-semibold text-foreground">{project.name}</span> and all associated data.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2 px-6 py-4">
+                  <Label htmlFor="delete-confirm">
+                    Type <span className="font-mono font-semibold text-foreground">{project.slug}</span> to confirm
+                  </Label>
+                  <Input id="delete-confirm" placeholder={project.slug} value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoComplete="off" />
+                </div>
+                <DialogFooter className="px-6 pb-6 pt-2">
+                  <Button variant="outline" onClick={() => { setDeleteOpen(false); setDeleteConfirm('') }}>Cancel</Button>
+                  <Button variant="destructive" disabled={!canDelete} onClick={handleDelete}>Delete Permanently</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
       </div>
     </PageTransition>
   )

@@ -123,7 +123,7 @@ function QuickStartCard({ project }: { project: Project }) {
   const gitUrl = 'https://github.com/your-studio/unity-flux-sdk.git'
   const envName =
     project.environment.charAt(0).toUpperCase() + project.environment.slice(1)
-  const cdnUrl = project.r2BucketUrl || 'https://flux-cdn.yourstudio.com'
+  const cdnUrl = project.r2BucketUrl || 'https://cdn.h1dr0n.org'
 
   return (
     <Card>
@@ -465,58 +465,6 @@ function ProjectOverview() {
             <CardContent className="space-y-3">
               <div className="grid gap-1">
                 <Label className="text-xs text-muted-foreground">
-                  Supabase URL
-                </Label>
-                <Input
-                  placeholder="https://your-project.supabase.co"
-                  value={project.supabaseUrl}
-                  onChange={(e) =>
-                    updateProjectMut.mutate({ id: project.id, updates: { supabaseUrl: e.target.value } })
-                  }
-                  className="text-xs h-8"
-                />
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">
-                  R2 Bucket URL
-                </Label>
-                <Input
-                  placeholder="https://flux-cdn.yourstudio.com"
-                  value={project.r2BucketUrl}
-                  onChange={(e) =>
-                    updateProjectMut.mutate({ id: project.id, updates: { r2BucketUrl: e.target.value } })
-                  }
-                  className="text-xs h-8"
-                />
-              </div>
-              {/* CDN Endpoints (read-only, shown when r2BucketUrl is set) */}
-              {project.r2BucketUrl && (
-                <div className="space-y-2 pt-1">
-                  <Separator />
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Globe className="h-3 w-3" />
-                    CDN Endpoints
-                  </Label>
-                  {(['production', 'staging', 'development'] as const).map((env) => {
-                    const url = `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
-                    return (
-                      <div key={env} className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase font-medium text-muted-foreground w-12 shrink-0">{env.slice(0, 4)}</span>
-                        <Input value={url} readOnly className="font-mono text-[10px] h-7 text-muted-foreground" />
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(url); }}>
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
-                          <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">
                   Environment
                 </Label>
                 <Select
@@ -535,6 +483,34 @@ function ProjectOverview() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* CDN Endpoints (read-only, auto-shown after first publish) */}
+              {project.r2BucketUrl && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="h-3 w-3" />
+                      CDN Endpoints
+                    </Label>
+                    {(['production', 'staging', 'development'] as const).map((env) => {
+                      const url = `${project.r2BucketUrl}/${project.slug}/${env}/master_version.json`
+                      return (
+                        <div key={env} className="flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-medium text-muted-foreground w-12 shrink-0">{env.slice(0, 4)}</span>
+                          <Input value={url} readOnly className="font-mono text-[10px] h-7 text-muted-foreground" />
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { navigator.clipboard.writeText(url) }}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
+                            <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3 w-3" /></a>
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
