@@ -34,3 +34,8 @@ Desktop.ini
 **/dist-ssr/
 dashboard/src/routeTree.gen.ts
 dashboard/*.txt
+.vercel/
+
+# Claude
+.claude/
+! .claude/settings.local.json
