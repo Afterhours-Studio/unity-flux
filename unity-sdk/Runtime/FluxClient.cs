@@ -40,7 +40,7 @@ namespace UnityFlux
         /// </summary>
         internal async Task<FluxVersionManifest> FetchVersionManifestAsync(string projectId, string environment)
         {
-            var url = $"{_serverUrl}/api/sdk?action=manifest?projectId={projectId}&env={environment}";
+            var url = $"{_serverUrl}/api/sdk?action=manifest&projectId={projectId}&env={environment}";
             var json = await GetAsync(url);
             var obj = JObject.Parse(json);
 
@@ -63,7 +63,7 @@ namespace UnityFlux
         /// </summary>
         internal async Task<string> FetchConfigDataAsync(string projectId, string environment)
         {
-            var url = $"{_serverUrl}/api/sdk?action=config?projectId={projectId}&env={environment}";
+            var url = $"{_serverUrl}/api/sdk?action=config&projectId={projectId}&env={environment}";
             var json = await GetAsync(url);
             var obj = JObject.Parse(json);
 

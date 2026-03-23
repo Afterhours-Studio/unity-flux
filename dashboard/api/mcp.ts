@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
@@ -7,6 +8,20 @@ import { verifyAccessToken, ISSUER } from './lib/oauth.js'
 import { isR2Configured } from './lib/r2.js'
 
 const MCP_API_KEY = process.env.FLUX_MCP_API_KEY
+
+// Session management — persists across warm Vercel invocations
+const mcpSessions = new Map<string, { server: McpServer; transport: StreamableHTTPServerTransport; createdAt: number }>()
+const SESSION_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+function cleanupSessions() {
+  const now = Date.now()
+  for (const [id, session] of mcpSessions) {
+    if (now - session.createdAt > SESSION_TTL_MS) {
+      session.transport.close()
+      mcpSessions.delete(id)
+    }
+  }
+}
 
 async function checkAuth(req: VercelRequest): Promise<boolean> {
   const auth = req.headers.authorization
@@ -376,11 +391,21 @@ function registerTools(server: McpServer) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined
+    if (sessionId && mcpSessions.has(sessionId)) {
+      const { transport } = mcpSessions.get(sessionId)!
+      return transport.handleRequest(req, res)
+    }
     return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
 
   if (req.method === 'DELETE') {
-    // MCP session cleanup — just acknowledge
+    const sessionId = req.headers['mcp-session-id'] as string | undefined
+    if (sessionId && mcpSessions.has(sessionId)) {
+      const { transport } = mcpSessions.get(sessionId)!
+      transport.close()
+      mcpSessions.delete(sessionId)
+    }
     return res.status(200).json({ ok: true })
   }
 
@@ -399,13 +424,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const server = new McpServer({ name: 'unity-flux', version: '0.1.0' })
-    registerTools(server)
+    cleanupSessions()
+    const sessionId = req.headers['mcp-session-id'] as string | undefined
 
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    res.on('close', () => transport.close())
-    await server.connect(transport)
-    await transport.handleRequest(req, res, req.body)
+    if (sessionId && mcpSessions.has(sessionId)) {
+      // Existing session — reuse server+transport
+      const { transport } = mcpSessions.get(sessionId)!
+      await transport.handleRequest(req, res, req.body)
+    } else if (!sessionId) {
+      // New session — create server+transport pair
+      const server = new McpServer({ name: 'unity-flux', version: '0.1.0' })
+      registerTools(server)
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+      })
+
+      transport.onclose = () => {
+        const sid = transport.sessionId
+        if (sid) mcpSessions.delete(sid)
+      }
+
+      await server.connect(transport)
+      await transport.handleRequest(req, res, req.body)
+
+      const sid = transport.sessionId
+      if (sid) {
+        mcpSessions.set(sid, { server, transport, createdAt: Date.now() })
+      }
+    } else {
+      // Session ID provided but not found — expired or cold start
+      res.status(404).json({ error: 'Session not found. Send an initialize request without a session ID to start a new session.' })
+    }
   } catch (err) {
     console.error('MCP error:', err)
     if (!res.headersSent) {
