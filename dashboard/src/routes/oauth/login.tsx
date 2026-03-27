@@ -94,10 +94,6 @@ function OAuthLoginPage() {
 
       // Step 3: Redirect back to client with authorization code
       setStatus('done')
-
-      // Sign out from dashboard session (OAuth login is separate)
-      await supabase.auth.signOut()
-
       window.location.href = result.redirect_url
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authorization failed')
