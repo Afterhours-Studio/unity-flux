@@ -418,6 +418,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = req.body
     console.log('[MCP] method:', body?.method, '| accept:', req.headers.accept)
 
+    // MCP SDK requires Accept: application/json, text/event-stream
+    // Normalize the Accept header in case the client omits text/event-stream
+    if (!req.headers.accept?.includes('text/event-stream')) {
+      req.headers.accept = 'application/json, text/event-stream'
+    }
+
     // Intercept res.end to log actual response
     const origEnd = res.end.bind(res)
     res.end = (...args: Parameters<typeof res.end>) => {
