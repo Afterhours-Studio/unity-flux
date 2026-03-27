@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!env) return res.status(400).json({ error: 'Missing env' })
     const { data: version } = await supabase
       .from('versions')
-      .select('version_tag, environment, table_count, row_count, created_at')
+      .select('version_tag, environment, table_count, row_count, published_at')
       .eq('project_id', projectId)
       .eq('environment', env)
       .eq('status', 'active')
@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       environment: version.environment,
       tableCount: version.table_count,
       rowCount: version.row_count,
-      publishedAt: version.created_at,
+      publishedAt: version.published_at,
     })
   }
 
@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!env) return res.status(400).json({ error: 'Missing env' })
     const { data: version } = await supabase
       .from('versions')
-      .select('version_tag, environment, data, created_at')
+      .select('version_tag, environment, data, published_at')
       .eq('project_id', projectId)
       .eq('environment', env)
       .eq('status', 'active')
@@ -96,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       version: version.version_tag,
       environment: version.environment,
-      publishedAt: version.created_at,
+      publishedAt: version.published_at,
       tables: version.data,
     })
   }
