@@ -376,6 +376,13 @@ function registerTools(server: McpServer) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
+    // Debug: ?tools=1 returns registered tool names (no auth required)
+    if (req.query.tools === '1') {
+      const s = new McpServer({ name: 'unity-flux', version: '0.1.0' })
+      registerTools(s)
+      const toolNames = Object.keys((s as any)._registeredTools ?? (s as any).tools ?? {})
+      return res.status(200).json({ toolCount: toolNames.length, tools: toolNames })
+    }
     return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
 
@@ -411,11 +418,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = req.body
     console.log('[MCP] method:', body?.method, '| accept:', req.headers.accept)
 
-    // Intercept response to log it
-    const originalJson = res.json.bind(res)
-    res.json = (data: unknown) => {
-      console.log('[MCP] response:', JSON.stringify(data)?.slice(0, 500))
-      return originalJson(data)
+    // Intercept res.end to log actual response
+    const origEnd = res.end.bind(res)
+    res.end = (...args: Parameters<typeof res.end>) => {
+      const data = args[0]
+      if (typeof data === 'string' || Buffer.isBuffer(data)) {
+        console.log('[MCP] response:', String(data).slice(0, 600))
+      }
+      return origEnd(...args)
     }
 
     await server.connect(transport)
