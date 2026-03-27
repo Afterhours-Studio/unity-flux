@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import * as db from './lib/supabase-server.js'
 import { verifyAccessToken, ISSUER } from './lib/oauth.js'
@@ -404,42 +403,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  const body = req.body
+  const method: string = body?.method
+  const id = body?.id ?? null
+
+  console.log('[MCP] method:', method)
+
   try {
-    // Stateless mode: fresh server+transport per request
-    // Vercel serverless functions don't preserve in-memory state between invocations
+    // Build server with all tools registered
     const server = new McpServer({ name: 'unity-flux', version: '0.1.0' })
     registerTools(server)
+    const abort = new AbortController()
 
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless — no session tracking
-      enableJsonResponse: true,      // return JSON instead of SSE for Vercel compat
+    // Handle MCP protocol directly — bypass transport to avoid SDK compat issues
+    if (method === 'initialize') {
+      const result = await (server as any).server._requestHandlers.get('initialize')(body, { signal: abort.signal })
+      return res.status(200).json({ jsonrpc: '2.0', id, result })
+    }
+
+    if (method === 'notifications/initialized') {
+      return res.status(202).end()
+    }
+
+    if (method === 'tools/list') {
+      const result = await (server as any).server._requestHandlers.get('tools/list')(body, { signal: abort.signal })
+      return res.status(200).json({ jsonrpc: '2.0', id, result })
+    }
+
+    if (method === 'tools/call') {
+      const result = await (server as any).server._requestHandlers.get('tools/call')(body, { signal: abort.signal })
+      return res.status(200).json({ jsonrpc: '2.0', id, result })
+    }
+
+    if (method === 'ping') {
+      return res.status(200).json({ jsonrpc: '2.0', id, result: {} })
+    }
+
+    // Unknown method
+    return res.status(200).json({
+      jsonrpc: '2.0', id,
+      error: { code: -32601, message: `Method not found: ${method}` },
     })
-
-    const body = req.body
-    console.log('[MCP] method:', body?.method, '| accept:', req.headers.accept)
-
-    // MCP SDK requires Accept: application/json, text/event-stream
-    // Normalize the Accept header in case the client omits text/event-stream
-    if (!req.headers.accept?.includes('text/event-stream')) {
-      req.headers.accept = 'application/json, text/event-stream'
-    }
-
-    // Intercept res.end to log actual response
-    const origEnd = res.end.bind(res)
-    res.end = (...args: Parameters<typeof res.end>) => {
-      const data = args[0]
-      if (typeof data === 'string' || Buffer.isBuffer(data)) {
-        console.log('[MCP] response:', String(data).slice(0, 600))
-      }
-      return origEnd(...args)
-    }
-
-    await server.connect(transport)
-    await transport.handleRequest(req, res, body)
   } catch (err) {
-    console.error('MCP error:', err)
-    if (!res.headersSent) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' })
-    }
+    console.error('[MCP] error:', err)
+    return res.status(200).json({
+      jsonrpc: '2.0', id,
+      error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
+    })
   }
 }
