@@ -147,7 +147,7 @@ function registerTools(server: McpServer) {
     startAt: z.string().optional().default(''),
     endAt: z.string().optional().default(''),
     color: z.string().optional().default('#3b82f6'),
-    config: z.record(z.unknown()).optional().default({}),
+    config: z.record(z.string(), z.unknown()).optional().default({}),
     recurring: z.string().nullable().optional().default(null),
   }, ({ projectId, ...event }) => db.createLiveOpsEvent(projectId as string, event as Parameters<typeof db.createLiveOpsEvent>[1]))
 
@@ -156,7 +156,7 @@ function registerTools(server: McpServer) {
     name: z.string().optional(), description: z.string().optional(),
     status: z.enum(['draft', 'scheduled', 'live', 'ended', 'cancelled']).optional(),
     startAt: z.string().optional(), endAt: z.string().optional(),
-    color: z.string().optional(), config: z.record(z.unknown()).optional(),
+    color: z.string().optional(), config: z.record(z.string(), z.unknown()).optional(),
     recurring: z.string().nullable().optional(),
   }, ({ eventId, ...updates }) => db.updateLiveOpsEvent(eventId as string, updates as Parameters<typeof db.updateLiveOpsEvent>[1]))
 
@@ -204,7 +204,7 @@ function registerTools(server: McpServer) {
       defaultValue: z.number(), description: z.string().optional().default(''),
     })).optional().default([]),
     outputMode: z.enum(['method', 'lookup']).optional().default('method'),
-    previewInputs: z.record(z.array(z.number())).optional().default({}),
+    previewInputs: z.record(z.string(), z.array(z.number())).optional().default({}),
   }, ({ projectId, ...formula }) => db.createFormula(projectId as string, formula as Parameters<typeof db.createFormula>[1]))
 
   tool('update_formula', 'Update a formula', {
@@ -216,7 +216,7 @@ function registerTools(server: McpServer) {
       defaultValue: z.number(), description: z.string().optional().default(''),
     })).optional(),
     outputMode: z.enum(['method', 'lookup']).optional(),
-    previewInputs: z.record(z.array(z.number())).optional(),
+    previewInputs: z.record(z.string(), z.array(z.number())).optional(),
   }, ({ formulaId, ...updates }) => db.updateFormula(formulaId as string, updates as Parameters<typeof db.updateFormula>[1]))
 
   tool('delete_formula', 'Delete a formula', {
@@ -377,14 +377,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     // Debug: ?tools=1 returns full tool definitions (no auth required)
     if (req.query.tools === '1') {
-      const s = new McpServer({ name: 'unity-flux', version: '0.1.0' })
-      registerTools(s)
-      const abort = new AbortController()
-      const result = await (s as any).server._requestHandlers.get('tools/list')(
-        { method: 'tools/list', params: {} },
-        { signal: abort.signal }
-      )
-      return res.status(200).json(result)
+      try {
+        const s = new McpServer({ name: 'unity-flux', version: '0.1.0' })
+        registerTools(s)
+        const abort = new AbortController()
+        const result = await (s as any).server._requestHandlers.get('tools/list')(
+          { method: 'tools/list', params: {} },
+          { signal: abort.signal }
+        )
+        return res.status(200).json({ ok: true, count: result?.tools?.length ?? 0, tools: result?.tools })
+      } catch (err) {
+        return res.status(200).json({ ok: false, error: err instanceof Error ? err.message : String(err) })
+      }
     }
     return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
@@ -431,6 +435,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (method === 'tools/list') {
       const result = await (server as any).server._requestHandlers.get('tools/list')(body, { signal: abort.signal })
+      console.log('[MCP] tools/list count:', result?.tools?.length ?? 0)
       return res.status(200).json({ jsonrpc: '2.0', id, result })
     }
 
