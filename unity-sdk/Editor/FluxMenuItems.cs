@@ -5,13 +5,13 @@ namespace UnityFlux.Editor
 {
     public static class FluxMenuItems
     {
-        [MenuItem("Window/Unity Flux/Dashboard", priority = 100)]
+        [MenuItem("Tools/Unity Flux/Dashboard", priority = 100)]
         public static void OpenDashboard()
         {
             FluxDashboardWindow.ShowWindow();
         }
 
-        [MenuItem("Window/Unity Flux/Clear Cache", priority = 200)]
+        [MenuItem("Tools/Unity Flux/Clear Cache", priority = 200)]
         public static void ClearCache()
         {
             var path = System.IO.Path.Combine(Application.persistentDataPath, "UnityFlux");

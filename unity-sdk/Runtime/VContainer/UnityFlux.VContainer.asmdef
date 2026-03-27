@@ -1,0 +1,25 @@
+{
+  "name": "UnityFlux.VContainer",
+  "rootNamespace": "UnityFlux.Integration",
+  "references": [
+    "UnityFlux.Runtime",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "UNITY_FLUX_VCONTAINER"
+  ],
+  "versionDefines": [
+    {
+      "name": "jp.hadashikick.vcontainer",
+      "expression": "",
+      "define": "UNITY_FLUX_VCONTAINER"
+    }
+  ],
+  "noEngineReferences": false
+}

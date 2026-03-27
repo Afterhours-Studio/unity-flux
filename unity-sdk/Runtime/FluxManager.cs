@@ -6,7 +6,7 @@ using UnityFlux.Internal;
 
 namespace UnityFlux
 {
-    public class FluxManager
+    public class FluxManager : IFluxManager, IFluxDataAccess
     {
         private static FluxManager _instance;
         public static FluxManager Instance => _instance ??= new FluxManager();
@@ -184,6 +184,46 @@ namespace UnityFlux
             SetState(FluxState.NotInitialized);
         }
 
+        // ─── IFluxDataAccess ───────────────────────────────
+
+        public bool IsReady => State == FluxState.Ready && _dataStore?.HasData == true;
+
+        public List<T> GetTable<T>(string tableName) where T : class, new()
+        {
+            EnsureReady();
+            return _dataStore.GetTable<T>(tableName);
+        }
+
+        public T Get<T>(string tableName, string parameterName)
+        {
+            EnsureReady();
+            return _dataStore.GetConfigValue<T>(tableName, parameterName);
+        }
+
+        public T GetOrDefault<T>(string tableName, string parameterName, T defaultValue = default)
+        {
+            if (!IsReady) return defaultValue;
+            try { return _dataStore.GetConfigValue<T>(tableName, parameterName); }
+            catch { return defaultValue; }
+        }
+
+        public string GetRawJson(string tableName)
+        {
+            EnsureReady();
+            return _dataStore.GetRawJson(tableName);
+        }
+
+        public bool Has(string tableName, string parameterName)
+        {
+            return IsReady && _dataStore.HasConfigValue(tableName, parameterName);
+        }
+
+        public IEnumerable<string> GetTableNames()
+        {
+            EnsureReady();
+            return _dataStore.GetTableNames();
+        }
+
         // ─── Internal accessor for FluxData ──────────────
 
         internal FluxDataStore DataStore => _dataStore;
@@ -194,6 +234,13 @@ namespace UnityFlux
         {
             if (_config == null)
                 throw new InvalidOperationException("FluxManager not configured. Call Configure() first.");
+        }
+
+        private void EnsureReady()
+        {
+            if (!IsReady)
+                throw new InvalidOperationException(
+                    "Flux data not ready. Call InitializeAsync() or SyncAsync() first.");
         }
 
         private void SetState(FluxState state)
