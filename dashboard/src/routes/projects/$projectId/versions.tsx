@@ -911,6 +911,12 @@ function VersionsPage() {
             <p className="text-muted-foreground text-sm text-center max-w-md">
               {t('versions.noVersionsDescription')}
             </p>
+            {canPublish && (
+              <Button className="mt-6" onClick={() => setPublishOpen(true)}>
+                <Rocket className="h-3.5 w-3.5 mr-1.5" />
+                {t('versions.publish')}
+              </Button>
+            )}
             <div className="flex gap-6 mt-8 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -927,6 +933,7 @@ function VersionsPage() {
             </div>
           </CardContent>
         </Card>
+        <PublishDialog projectId={projectId} open={publishOpen} onOpenChange={setPublishOpen} />
       </PageTransition>
     )
   }
