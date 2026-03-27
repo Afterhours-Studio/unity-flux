@@ -933,7 +933,7 @@ function VersionsPage() {
             </div>
           </CardContent>
         </Card>
-        <PublishDialog projectId={projectId} open={publishOpen} onOpenChange={setPublishOpen} />
+        <PublishDialog open={publishOpen} onOpenChange={setPublishOpen} onPublish={handlePublish} />
       </PageTransition>
     )
   }
