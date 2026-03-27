@@ -375,12 +375,16 @@ function registerTools(server: McpServer) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
-    // Debug: ?tools=1 returns registered tool names (no auth required)
+    // Debug: ?tools=1 returns full tool definitions (no auth required)
     if (req.query.tools === '1') {
       const s = new McpServer({ name: 'unity-flux', version: '0.1.0' })
       registerTools(s)
-      const toolNames = Object.keys((s as any)._registeredTools ?? (s as any).tools ?? {})
-      return res.status(200).json({ toolCount: toolNames.length, tools: toolNames })
+      const abort = new AbortController()
+      const result = await (s as any).server._requestHandlers.get('tools/list')(
+        { method: 'tools/list', params: {} },
+        { signal: abort.signal }
+      )
+      return res.status(200).json(result)
     }
     return res.status(200).json({ name: 'unity-flux', version: '0.1.0', status: 'ok' })
   }
