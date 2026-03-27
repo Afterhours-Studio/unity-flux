@@ -408,8 +408,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       enableJsonResponse: true,      // return JSON instead of SSE for Vercel compat
     })
 
+    const body = req.body
+    console.log('[MCP] method:', body?.method, '| accept:', req.headers.accept)
+
+    // Intercept response to log it
+    const originalJson = res.json.bind(res)
+    res.json = (data: unknown) => {
+      console.log('[MCP] response:', JSON.stringify(data)?.slice(0, 500))
+      return originalJson(data)
+    }
+
     await server.connect(transport)
-    await transport.handleRequest(req, res, req.body)
+    await transport.handleRequest(req, res, body)
   } catch (err) {
     console.error('MCP error:', err)
     if (!res.headersSent) {
