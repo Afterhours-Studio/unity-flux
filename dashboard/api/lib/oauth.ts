@@ -7,9 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // ─── Constants ───────────────────────────────────────────
 
-const BASE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : (process.env.BASE_URL || 'https://flux.h1dr0n.org')
+const BASE_URL = process.env.BASE_URL || 'https://flux.h1dr0n.org'
 
 export const ISSUER = BASE_URL
 export const MCP_RESOURCE = `${BASE_URL}/api/mcp`
