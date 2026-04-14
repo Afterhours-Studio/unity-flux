@@ -2,7 +2,8 @@
   "name": "UnityFlux.Runtime",
   "rootNamespace": "UnityFlux",
   "references": [
-    "Newtonsoft.Json"
+    "Newtonsoft.Json",
+    "UniTask"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -11,6 +12,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.cysharp.unitask",
+      "expression": "",
+      "define": "UNITY_FLUX_UNITASK"
+    }
+  ],
   "noEngineReferences": false
 }

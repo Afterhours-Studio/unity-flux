@@ -3,7 +3,8 @@
   "rootNamespace": "UnityFlux.Editor",
   "references": [
     "UnityFlux.Runtime",
-    "Newtonsoft.Json"
+    "Newtonsoft.Json",
+    "UniTask"
   ],
   "includePlatforms": [
     "Editor"
@@ -14,6 +15,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.cysharp.unitask",
+      "expression": "",
+      "define": "UNITY_FLUX_UNITASK"
+    }
+  ],
   "noEngineReferences": false
 }

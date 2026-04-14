@@ -1,9 +1,13 @@
 using System;
 using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
 using UnityFlux.Internal;
+#if UNITY_FLUX_UNITASK
+using Cysharp.Threading.Tasks;
+#else
+using System.Threading.Tasks;
+#endif
 
 namespace UnityFlux
 {
@@ -34,11 +38,11 @@ namespace UnityFlux
 
         // ─── Public API ──────────────────────────────────
 
-        /// <summary>
-        /// Fetch the active version manifest (metadata, no data payload).
-        /// Uses authenticated /api/sdk?action=manifest endpoint.
-        /// </summary>
+#if UNITY_FLUX_UNITASK
+        internal async UniTask<FluxVersionManifest> FetchVersionManifestAsync(string projectId, string environment)
+#else
         internal async Task<FluxVersionManifest> FetchVersionManifestAsync(string projectId, string environment)
+#endif
         {
             var url = $"{_serverUrl}/api/sdk?action=manifest&projectId={projectId}&env={environment}";
             var json = await GetAsync(url);
@@ -57,11 +61,11 @@ namespace UnityFlux
             };
         }
 
-        /// <summary>
-        /// Fetch the full config data (all tables).
-        /// Uses authenticated /api/sdk?action=config endpoint.
-        /// </summary>
+#if UNITY_FLUX_UNITASK
+        internal async UniTask<string> FetchConfigDataAsync(string projectId, string environment)
+#else
         internal async Task<string> FetchConfigDataAsync(string projectId, string environment)
+#endif
         {
             var url = $"{_serverUrl}/api/sdk?action=config&projectId={projectId}&env={environment}";
             var json = await GetAsync(url);
@@ -71,10 +75,11 @@ namespace UnityFlux
             return tables?.ToString() ?? "{}";
         }
 
-        /// <summary>
-        /// Check if there's a newer version than the local one.
-        /// </summary>
+#if UNITY_FLUX_UNITASK
+        internal async UniTask<bool> HasNewVersionAsync(string projectId, string environment, string localVersionTag)
+#else
         internal async Task<bool> HasNewVersionAsync(string projectId, string environment, string localVersionTag)
+#endif
         {
             try
             {
@@ -91,7 +96,11 @@ namespace UnityFlux
 
         // ─── HTTP layer ──────────────────────────────────
 
+#if UNITY_FLUX_UNITASK
+        private async UniTask<string> GetAsync(string url)
+#else
         private async Task<string> GetAsync(string url)
+#endif
         {
             return await FluxRetry.ExecuteAsync(async () =>
             {
@@ -105,8 +114,12 @@ namespace UnityFlux
 
                 var operation = request.SendWebRequest();
 
+#if UNITY_FLUX_UNITASK
+                await operation.ToUniTask();
+#else
                 while (!operation.isDone)
                     await Task.Yield();
+#endif
 
                 if (request.result != UnityWebRequest.Result.Success)
                     throw new Exception($"HTTP {request.responseCode}: {request.error} - {url}");

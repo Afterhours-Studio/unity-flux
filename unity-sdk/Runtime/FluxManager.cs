@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using UnityFlux.Internal;
+#if UNITY_FLUX_UNITASK
+using Cysharp.Threading.Tasks;
+#else
+using System.Threading.Tasks;
+#endif
 
 namespace UnityFlux
 {
@@ -45,7 +49,11 @@ namespace UnityFlux
         /// Load cached data for instant startup. Works offline.
         /// Call this before SyncAsync for immediate data access.
         /// </summary>
+#if UNITY_FLUX_UNITASK
+        public UniTask InitializeAsync()
+#else
         public async Task InitializeAsync()
+#endif
         {
             EnsureConfigured();
             SetState(FluxState.Initializing);
@@ -74,7 +82,11 @@ namespace UnityFlux
                 throw;
             }
 
+#if UNITY_FLUX_UNITASK
+            return UniTask.CompletedTask;
+#else
             await Task.CompletedTask;
+#endif
         }
 
         /// <summary>
@@ -82,7 +94,11 @@ namespace UnityFlux
         /// Uses delta sync to only download tables whose hashes have changed.
         /// Returns true if data was updated, false if already latest.
         /// </summary>
+#if UNITY_FLUX_UNITASK
+        public async UniTask<bool> SyncAsync()
+#else
         public async Task<bool> SyncAsync()
+#endif
         {
             EnsureConfigured();
             SetState(FluxState.Syncing);
@@ -167,7 +183,11 @@ namespace UnityFlux
         /// <summary>
         /// Force re-download regardless of version.
         /// </summary>
+#if UNITY_FLUX_UNITASK
+        public async UniTask ForceRefreshAsync()
+#else
         public async Task ForceRefreshAsync()
+#endif
         {
             CurrentVersion = null;
             await SyncAsync();
